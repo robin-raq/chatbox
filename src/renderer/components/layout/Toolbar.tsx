@@ -6,6 +6,7 @@ import {
   IconDeviceFloppy,
   IconDots,
   IconHistory,
+  IconPuzzle,
   IconSearch,
   IconTrash,
 } from '@tabler/icons-react'
@@ -40,6 +41,9 @@ export default function Toolbar({ sessionId }: { sessionId: string }) {
   const setThreadHistoryDrawerOpen = useSetAtom(atoms.showThreadHistoryDrawerAtom)
   const widthFull = useUIStore((s) => s.widthFull)
   const setWidthFull = useUIStore((s) => s.setWidthFull)
+  const showAppPanel = useUIStore((s) => s.showAppPanel)
+  const activeAppId = useUIStore((s) => s.activeAppId)
+  const setShowAppPanel = useUIStore((s) => s.setShowAppPanel)
 
   useEffect(() => {
     const offUpdateDownloaded = platform.onUpdateDownloaded(() => {
@@ -98,6 +102,19 @@ export default function Toolbar({ sessionId }: { sessionId: string }) {
       {isLargeScreen && (
         <ActionIcon variant="subtle" size={28} color="chatbox-secondary" onClick={() => setWidthFull(!widthFull)}>
           {widthFull ? <LayoutExpand strokeWidth={1.8} /> : <LayoutShrink strokeWidth={1.8} />}
+        </ActionIcon>
+      )}
+
+      {/* ChatBridge: App panel toggle */}
+      {activeAppId && (
+        <ActionIcon
+          variant="subtle"
+          size={28}
+          color={showAppPanel ? 'blue' : 'chatbox-secondary'}
+          onClick={() => setShowAppPanel(!showAppPanel)}
+          title="Toggle App Panel"
+        >
+          <IconPuzzle size={18} strokeWidth={1.8} />
         </ActionIcon>
       )}
 

@@ -9,6 +9,7 @@ import MessageList, { type MessageListRef } from '@/components/chat/MessageList'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import InputBox from '@/components/InputBox/InputBox'
 import Header from '@/components/layout/Header'
+import AppPanel from '@/components/app/AppPanel'
 import ThreadHistoryDrawer from '@/components/session/ThreadHistoryDrawer'
 import { updateSession as updateSessionStore, useSession } from '@/stores/chatStore'
 import { lastUsedModelStore } from '@/stores/lastUsedModelStore'
@@ -154,25 +155,33 @@ function RouteComponent() {
     <div className="flex flex-col h-full">
       <Header session={currentSession} />
 
-      {/* MessageList 设置 key，确保每个 session 对应新的 MessageList 实例 */}
-      <MessageList ref={messageListRef} key={`message-list${currentSessionId}`} currentSession={currentSession} />
+      {/* Horizontal split: chat content + app panel */}
+      <div className="flex flex-row flex-1 overflow-hidden">
+        {/* Chat content column */}
+        <div className="flex flex-col flex-1 min-w-0">
+          <MessageList ref={messageListRef} key={`message-list${currentSessionId}`} currentSession={currentSession} />
 
-      {/* <ScrollButtons /> */}
-      <ErrorBoundary name="session-inputbox">
-        <InputBox
-          key={`input-box${currentSession.id}`}
-          sessionId={currentSession.id}
-          sessionType={currentSession.type}
-          model={model}
-          onStartNewThread={onStartNewThread}
-          onRollbackThread={onRollbackThread}
-          onSelectModel={onSelectModel}
-          onClickSessionSettings={onClickSessionSettings}
-          generating={!!lastGeneratingMessage}
-          onSubmit={onSubmit}
-          onStopGenerating={onStopGenerating}
-        />
-      </ErrorBoundary>
+          <ErrorBoundary name="session-inputbox">
+            <InputBox
+              key={`input-box${currentSession.id}`}
+              sessionId={currentSession.id}
+              sessionType={currentSession.type}
+              model={model}
+              onStartNewThread={onStartNewThread}
+              onRollbackThread={onRollbackThread}
+              onSelectModel={onSelectModel}
+              onClickSessionSettings={onClickSessionSettings}
+              generating={!!lastGeneratingMessage}
+              onSubmit={onSubmit}
+              onStopGenerating={onStopGenerating}
+            />
+          </ErrorBoundary>
+        </div>
+
+        {/* App panel (renders conditionally based on uiStore.showAppPanel) */}
+        <AppPanel />
+      </div>
+
       <ThreadHistoryDrawer session={currentSession} />
     </div>
   ) : (

@@ -44,6 +44,12 @@ export const uiStore = createStore(
         widthFull: false, // Stored UI preference
         showCopilotsInNewSession: false,
         sidebarWidth: null as number | null, // Custom sidebar width, null means use default
+
+        // ChatBridge App Panel state
+        showAppPanel: false,
+        activeAppId: null as string | null,
+        appPanelUrl: '' as string,
+        appPanelName: '' as string,
       },
       (set, get) => ({
         addToast: (content: string, duration?: number) => {
@@ -198,6 +204,17 @@ export const uiStore = createStore(
         setSidebarWidth: (sidebarWidth: number | null) => {
           set({ sidebarWidth })
         },
+
+        // ChatBridge App Panel actions
+        openApp: (appId: string, url: string, name: string) => {
+          set({ showAppPanel: true, activeAppId: appId, appPanelUrl: url, appPanelName: name })
+        },
+        closeApp: () => {
+          set({ showAppPanel: false, activeAppId: null, appPanelUrl: '', appPanelName: '' })
+        },
+        setShowAppPanel: (show: boolean) => {
+          set({ showAppPanel: show })
+        },
       })
     ),
     {
@@ -216,4 +233,9 @@ export const uiStore = createStore(
 
 export function useUIStore<U>(selector: Parameters<typeof useStore<typeof uiStore, U>>[1]) {
   return useStore<typeof uiStore, U>(uiStore, selector)
+}
+
+// Expose store globally for dev/debug (allows triggering apps from browser console)
+if (typeof window !== 'undefined') {
+  ;(window as any).__chatbridge_uiStore = uiStore
 }
