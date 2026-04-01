@@ -1,6 +1,7 @@
 import { ActionIcon, Flex, Loader, Text } from '@mantine/core'
 import { IconX } from '@tabler/icons-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { appRegistry } from '@/packages/app-registry/registry'
 import { connectBridge, disconnectBridge } from '@/packages/app-registry/toolset'
 import { useUIStore } from '@/stores/uiStore'
 
@@ -29,6 +30,15 @@ export default function AppPanel() {
       }
     }
   }, [activeAppId])
+
+  // Determine sandbox level based on app's auth tier
+  const activeApp = activeAppId ? appRegistry.getApp(activeAppId) : null
+  const needsExternalAccess = activeApp?.authTier === 'external_authenticated'
+  // Internal apps: strict sandbox (scripts only)
+  // External authenticated apps: relaxed sandbox (needs SDK loading, popups for OAuth)
+  const sandboxAttrs = needsExternalAccess
+    ? 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox'
+    : 'allow-scripts allow-popups allow-popups-to-escape-sandbox'
 
   if (!showAppPanel || !appPanelUrl) return null
 
@@ -59,7 +69,7 @@ export default function AppPanel() {
         <iframe
           ref={iframeRef}
           src={appPanelUrl}
-          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+          sandbox={sandboxAttrs}
           onLoad={handleIframeLoad}
           title={appPanelName || 'App'}
           className="w-full h-full border-0"
