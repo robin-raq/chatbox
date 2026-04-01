@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grokipedia - ChatBridge</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; padding: 16px; color: #1e293b; }
+    .empty { text-align: center; padding: 40px 20px; color: #94a3b8; }
+    .empty-icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-text { font-size: 14px; }
+    .article { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .article-title { font-size: 22px; font-weight: 700; color: #1a1f36; margin-bottom: 4px; }
+    .article-meta { font-size: 12px; color: #94a3b8; margin-bottom: 16px; }
+    .article-summary { font-size: 14px; line-height: 1.7; color: #334155; margin-bottom: 20px; }
+    .section { margin-bottom: 16px; }
+    .section-title { font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .fact-list { list-style: none; padding: 0; }
+    .fact-list li { font-size: 13px; padding: 6px 0; border-bottom: 1px solid #e2e8f0; color: #475569; }
+    .fact-list li:last-child { border-bottom: none; }
+    .related { display: flex; flex-wrap: wrap; gap: 6px; }
+    .related-tag { font-size: 12px; padding: 4px 10px; background: #e0e7ff; color: #3b82f6; border-radius: 12px; cursor: pointer; }
+    .related-tag:hover { background: #c7d2fe; }
+    .search-results { list-style: none; padding: 0; }
+    .search-result { padding: 12px; margin-bottom: 8px; background: white; border-radius: 6px; border: 1px solid #e2e8f0; cursor: pointer; }
+    .search-result:hover { border-color: #3b82f6; background: #f8faff; }
+    .search-result-title { font-size: 15px; font-weight: 600; color: #1a1f36; }
+    .search-result-snippet { font-size: 13px; color: #64748b; margin-top: 4px; }
+    .loading { text-align: center; padding: 40px; color: #94a3b8; }
+    .error { text-align: center; padding: 20px; color: #ef4444; background: #fef2f2; border-radius: 6px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div id="content">
+    <div class="empty">
+      <div class="empty-icon">📚</div>
+      <div class="empty-text">Ask the chatbot to look up a topic</div>
+    </div>
+  </div>
+
+  <script src="/apps/sdk/chatbridge-app-sdk.js"></script>
+  <script>
+    var currentArticle = null;
+
+    function renderArticle(article) {
+      currentArticle = article;
+      var content = document.getElementById('content');
+      // Clear safely
+      while (content.firstChild) content.removeChild(content.firstChild);
+
+      var div = document.createElement('div');
+      div.className = 'article';
+
+      // Title
+      var title = document.createElement('div');
+      title.className = 'article-title';
+      title.textContent = article.title || 'Article';
+      div.appendChild(title);
+
+      // Meta
+      if (article.source) {
+        var meta = document.createElement('div');
+        meta.className = 'article-meta';
+        meta.textContent = 'Source: ' + article.source;
+        div.appendChild(meta);
+      }
+
+      // Summary
+      if (article.summary) {
+        var summary = document.createElement('div');
+        summary.className = 'article-summary';
+        summary.textContent = article.summary;
+        div.appendChild(summary);
+      }
+
+      // Key facts
+      if (article.key_facts && article.key_facts.length > 0) {
+        var section = document.createElement('div');
+        section.className = 'section';
+        var sTitle = document.createElement('div');
+        sTitle.className = 'section-title';
+        sTitle.textContent = 'Key Facts';
+        section.appendChild(sTitle);
+        var list = document.createElement('ul');
+        list.className = 'fact-list';
+        article.key_facts.forEach(function(fact) {
+          var li = document.createElement('li');
+          li.textContent = fact;
+          list.appendChild(li);
+        });
+        section.appendChild(list);
+        div.appendChild(section);
+      }
+
+      // Related topics
+      if (article.related && article.related.length > 0) {
+        var relSection = document.createElement('div');
+        relSection.className = 'section';
+        var relTitle = document.createElement('div');
+        relTitle.className = 'section-title';
+        relTitle.textContent = 'Related Topics';
+        relSection.appendChild(relTitle);
+        var relDiv = document.createElement('div');
+        relDiv.className = 'related';
+        article.related.forEach(function(topic) {
+          var tag = document.createElement('span');
+          tag.className = 'related-tag';
+          tag.textContent = topic;
+          relDiv.appendChild(tag);
+        });
+        relSection.appendChild(relDiv);
+        div.appendChild(relSection);
+      }
+
+      content.appendChild(div);
+    }
+
+    function renderSearchResults(results) {
+      var content = document.getElementById('content');
+      while (content.firstChild) content.removeChild(content.firstChild);
+
+      if (!results || results.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No results found.';
+        content.appendChild(empty);
+        return;
+      }
+
+      var list = document.createElement('ul');
+      list.className = 'search-results';
+      results.forEach(function(r) {
+        var li = document.createElement('li');
+        li.className = 'search-result';
+        var title = document.createElement('div');
+        title.className = 'search-result-title';
+        title.textContent = r.title || 'Untitled';
+        li.appendChild(title);
+        if (r.snippet) {
+          var snippet = document.createElement('div');
+          snippet.className = 'search-result-snippet';
+          snippet.textContent = r.snippet;
+          li.appendChild(snippet);
+        }
+        list.appendChild(li);
+      });
+      content.appendChild(list);
+    }
+
+    function showLoading() {
+      var content = document.getElementById('content');
+      while (content.firstChild) content.removeChild(content.firstChild);
+      var div = document.createElement('div');
+      div.className = 'loading';
+      div.textContent = 'Searching...';
+      content.appendChild(div);
+    }
+
+    function showError(msg) {
+      var content = document.getElementById('content');
+      while (content.firstChild) content.removeChild(content.firstChild);
+      var div = document.createElement('div');
+      div.className = 'error';
+      div.textContent = msg;
+      content.appendChild(div);
+    }
+
+    // Tool handlers
+    ChatBridge.onToolCall('search_articles', function(params) {
+      showLoading();
+      // Simulate search results since we don't have a backend proxy yet
+      // In production, this would call the platform backend which calls Grokipedia API
+      var query = params.query || '';
+      var results = generateMockResults(query);
+      renderSearchResults(results);
+      return 'Found ' + results.length + ' articles about "' + query + '". Results are displayed in the side panel. Summarize the top results for the user.';
+    });
+
+    ChatBridge.onToolCall('get_article', function(params) {
+      showLoading();
+      var article = generateMockArticle(params.title || params.query || 'Unknown Topic');
+      renderArticle(article);
+      ChatBridge.sendCompletion({ title: article.title });
+      return 'Article "' + article.title + '" is now displayed in the side panel with key facts and related topics. Summarize the key points for the student.';
+    });
+
+    ChatBridge.onToolCall('explain_topic', function(params) {
+      var topic = params.topic || params.query || '';
+      var article = generateMockArticle(topic);
+      renderArticle(article);
+      return 'Showing article about "' + topic + '" in the side panel. Use the key facts to explain this topic to the student in simple terms.';
+    });
+
+    // Mock data generator (replace with real API calls via backend proxy)
+    function generateMockResults(query) {
+      var q = query.toLowerCase();
+      return [
+        { title: query.charAt(0).toUpperCase() + query.slice(1), snippet: 'A comprehensive overview of ' + query + ' covering its history, key concepts, and modern significance.' },
+        { title: 'History of ' + query, snippet: 'The historical development and evolution of ' + query + ' from ancient times to the present day.' },
+        { title: query + ' in Science', snippet: 'Scientific principles, discoveries, and research related to ' + query + '.' },
+      ];
+    }
+
+    function generateMockArticle(topic) {
+      var t = topic.charAt(0).toUpperCase() + topic.slice(1);
+      return {
+        title: t,
+        source: 'Grokipedia',
+        summary: t + ' is a broad and fascinating topic that encompasses many areas of study. It has been the subject of research and discussion for centuries, with contributions from scientists, philosophers, and educators worldwide. Understanding ' + topic.toLowerCase() + ' is fundamental to many fields of knowledge.',
+        key_facts: [
+          t + ' was first formally studied in the early modern period',
+          'There are multiple sub-disciplines within ' + topic.toLowerCase(),
+          'Modern research continues to reveal new aspects of ' + topic.toLowerCase(),
+          'It is taught at all levels from elementary school through university',
+          t + ' has practical applications in everyday life',
+        ],
+        related: [
+          'Science', 'History', 'Education', 'Research', 'Technology'
+        ],
+      };
+    }
+  </script>
+</body>
+</html>
