@@ -71,6 +71,9 @@ async function initializeApp() {
 
   // 启动mcp服务器
   import('./setup/mcp_bootstrap')
+
+  // Register ChatBridge built-in apps
+  import('./packages/app-registry/bootstrap').then((m) => m.bootstrapAppRegistry())
 }
 
 // ==========渲染节点==============
