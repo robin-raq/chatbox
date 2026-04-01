@@ -154,7 +154,7 @@ const DRAWING_MANIFEST: AppManifest = {
 const SPOTIFY_MANIFEST: AppManifest = {
   id: 'spotify',
   name: 'Spotify',
-  description: 'Search for music, create playlists, and add tracks. Use when students want study music, background music, or to create a playlist. The user must connect their Spotify account first — if not connected, tell them to click the Connect button in the side panel.',
+  description: 'Search for music, create playlists, and add tracks on Spotify. IMPORTANT: Before calling any Spotify tool, first tell the user they need to click the green "Connect Spotify" button in the side panel to authorize their account. If a tool returns "AUTHORIZATION REQUIRED", tell the user to click Connect Spotify and wait for them to confirm before retrying.',
   icon: '🎵',
   uiUrl: '/apps/spotify/index.html',
   authTier: 'external_authenticated',
