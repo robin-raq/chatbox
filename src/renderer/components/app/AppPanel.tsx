@@ -59,7 +59,7 @@ export default function AppPanel() {
         <iframe
           ref={iframeRef}
           src={appPanelUrl}
-          sandbox="allow-scripts"
+          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
           onLoad={handleIframeLoad}
           title={appPanelName || 'App'}
           className="w-full h-full border-0"
