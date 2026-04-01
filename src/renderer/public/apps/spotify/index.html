@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spotify - ChatBridge</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #121212; color: #fff; padding: 16px; }
+    .header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .header-icon { font-size: 28px; }
+    .header-title { font-size: 18px; font-weight: 700; }
+    .header-sub { font-size: 12px; color: #b3b3b3; }
+    .auth-banner { background: #282828; border-radius: 8px; padding: 16px; text-align: center; margin-bottom: 16px; }
+    .auth-banner p { font-size: 13px; color: #b3b3b3; margin-bottom: 10px; }
+    .auth-btn { padding: 10px 24px; font-size: 14px; font-weight: 600; border: none; border-radius: 20px; background: #1db954; color: white; cursor: pointer; }
+    .auth-btn:hover { background: #1ed760; }
+    .connected { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: #282828; border-radius: 8px; margin-bottom: 16px; }
+    .connected-dot { width: 8px; height: 8px; background: #1db954; border-radius: 50%; }
+    .connected-text { font-size: 13px; color: #b3b3b3; }
+    .section-title { font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 10px; }
+    .track-list { list-style: none; }
+    .track { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 4px; cursor: pointer; }
+    .track:hover { background: #282828; }
+    .track-num { width: 20px; text-align: right; font-size: 13px; color: #b3b3b3; }
+    .track-art { width: 40px; height: 40px; background: #282828; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .track-info { flex: 1; }
+    .track-name { font-size: 14px; font-weight: 500; }
+    .track-artist { font-size: 12px; color: #b3b3b3; }
+    .track-duration { font-size: 12px; color: #b3b3b3; }
+    .playlist { background: #282828; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    .playlist-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .playlist-meta { font-size: 12px; color: #b3b3b3; }
+    .empty { text-align: center; padding: 40px; color: #b3b3b3; }
+    .empty-icon { font-size: 40px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span class="header-icon">🎵</span>
+    <div>
+      <div class="header-title">Spotify</div>
+      <div class="header-sub">Music for studying</div>
+    </div>
+  </div>
+  <div id="content">
+    <div id="auth-section" class="auth-banner">
+      <p>Connect your Spotify account to create playlists and search for music</p>
+      <button class="auth-btn" onclick="connectSpotify()">Connect Spotify</button>
+    </div>
+    <div class="empty">
+      <div class="empty-icon">🎧</div>
+      <div>Ask the chatbot to find music or create a playlist</div>
+    </div>
+  </div>
+
+  <script src="/apps/sdk/chatbridge-app-sdk.js"></script>
+  <script>
+    var isConnected = false;
+    var currentPlaylist = null;
+    var playlistTracks = [];
+
+    function connectSpotify() {
+      // In production: opens OAuth popup via platform
+      // For now: simulate connection
+      isConnected = true;
+      var authSection = document.getElementById('auth-section');
+      while (authSection.firstChild) authSection.removeChild(authSection.firstChild);
+      var dot = document.createElement('span');
+      dot.className = 'connected-dot';
+      authSection.appendChild(dot);
+      var text = document.createElement('span');
+      text.className = 'connected-text';
+      text.textContent = 'Connected as Demo User';
+      authSection.appendChild(text);
+      authSection.className = 'connected';
+      ChatBridge.sendContextUpdate({ event: 'connected', user: 'Demo User' });
+    }
+
+    function renderTracks(tracks, title) {
+      var content = document.getElementById('content');
+      // Keep auth section, clear the rest
+      var authSection = document.getElementById('auth-section');
+      while (content.firstChild) content.removeChild(content.firstChild);
+      content.appendChild(authSection);
+
+      var sTitle = document.createElement('div');
+      sTitle.className = 'section-title';
+      sTitle.textContent = title || 'Search Results';
+      content.appendChild(sTitle);
+
+      var list = document.createElement('ul');
+      list.className = 'track-list';
+      tracks.forEach(function(track, i) {
+        var li = document.createElement('li');
+        li.className = 'track';
+
+        var num = document.createElement('span');
+        num.className = 'track-num';
+        num.textContent = (i + 1).toString();
+        li.appendChild(num);
+
+        var art = document.createElement('div');
+        art.className = 'track-art';
+        art.textContent = '🎵';
+        li.appendChild(art);
+
+        var info = document.createElement('div');
+        info.className = 'track-info';
+        var name = document.createElement('div');
+        name.className = 'track-name';
+        name.textContent = track.name;
+        info.appendChild(name);
+        var artist = document.createElement('div');
+        artist.className = 'track-artist';
+        artist.textContent = track.artist;
+        info.appendChild(artist);
+        li.appendChild(info);
+
+        var dur = document.createElement('span');
+        dur.className = 'track-duration';
+        dur.textContent = track.duration || '3:30';
+        li.appendChild(dur);
+
+        list.appendChild(li);
+      });
+      content.appendChild(list);
+    }
+
+    function renderPlaylist(name, tracks) {
+      var content = document.getElementById('content');
+      var authSection = document.getElementById('auth-section');
+      while (content.firstChild) content.removeChild(content.firstChild);
+      content.appendChild(authSection);
+
+      var pl = document.createElement('div');
+      pl.className = 'playlist';
+      var plName = document.createElement('div');
+      plName.className = 'playlist-name';
+      plName.textContent = name;
+      pl.appendChild(plName);
+      var plMeta = document.createElement('div');
+      plMeta.className = 'playlist-meta';
+      plMeta.textContent = tracks.length + ' tracks';
+      pl.appendChild(plMeta);
+      content.appendChild(pl);
+
+      renderTracks(tracks, 'Playlist Tracks');
+    }
+
+    // Mock data
+    function mockSearch(query) {
+      var q = query.toLowerCase();
+      var genres = {
+        'study': [
+          { name: 'Lo-fi Beats to Study To', artist: 'ChilledCow', duration: '3:22' },
+          { name: 'Calm Focus', artist: 'Brain Food', duration: '4:15' },
+          { name: 'Deep Concentration', artist: 'Study Music', duration: '5:01' },
+          { name: 'Ambient Study', artist: 'Quiet Hours', duration: '3:45' },
+          { name: 'Piano Focus', artist: 'Classical Study', duration: '4:30' },
+        ],
+        'chill': [
+          { name: 'Sunset Vibes', artist: 'Chill Nation', duration: '3:18' },
+          { name: 'Ocean Breeze', artist: 'Nature Sounds', duration: '4:02' },
+          { name: 'Lazy Sunday', artist: 'Relax FM', duration: '3:55' },
+          { name: 'Coffee Shop Jazz', artist: 'Jazz Café', duration: '4:22' },
+          { name: 'Evening Wind Down', artist: 'Calm Collective', duration: '3:40' },
+        ],
+      };
+      // Return matching genre or default
+      for (var key in genres) {
+        if (q.indexOf(key) >= 0) return genres[key];
+      }
+      return [
+        { name: query + ' Mix', artist: 'Various Artists', duration: '3:30' },
+        { name: 'Best of ' + query, artist: 'Playlist Radio', duration: '4:00' },
+        { name: query + ' Essentials', artist: 'Curated', duration: '3:45' },
+        { name: 'Discover ' + query, artist: 'Weekly Mix', duration: '3:22' },
+        { name: query + ' Vibes', artist: 'Mood Music', duration: '4:10' },
+      ];
+    }
+
+    // Tool handlers
+    ChatBridge.onToolCall('search_tracks', function(params) {
+      if (!isConnected) {
+        return 'User needs to connect their Spotify account first. The Connect button is shown in the side panel.';
+      }
+      var query = params.query || '';
+      var tracks = mockSearch(query);
+      renderTracks(tracks, 'Results for "' + query + '"');
+      return 'Found ' + tracks.length + ' tracks for "' + query + '". Results are shown in the side panel: ' + tracks.map(function(t) { return t.name + ' by ' + t.artist; }).join(', ') + '.';
+    });
+
+    ChatBridge.onToolCall('create_playlist', function(params) {
+      if (!isConnected) {
+        return 'User needs to connect their Spotify account first. The Connect button is shown in the side panel.';
+      }
+      var name = params.name || 'My Playlist';
+      currentPlaylist = name;
+      playlistTracks = [];
+      renderPlaylist(name, playlistTracks);
+      return 'Created playlist "' + name + '". It is currently empty. Use add_to_playlist to add tracks.';
+    });
+
+    ChatBridge.onToolCall('add_to_playlist', function(params) {
+      if (!isConnected) {
+        return 'User needs to connect their Spotify account first.';
+      }
+      if (!currentPlaylist) {
+        return 'No playlist is active. Create one first with create_playlist.';
+      }
+      var trackName = params.track_name || 'Unknown Track';
+      var artist = params.artist || 'Unknown Artist';
+      playlistTracks.push({ name: trackName, artist: artist, duration: '3:30' });
+      renderPlaylist(currentPlaylist, playlistTracks);
+      return 'Added "' + trackName + '" by ' + artist + ' to playlist "' + currentPlaylist + '". Playlist now has ' + playlistTracks.length + ' tracks.';
+    });
+  </script>
+</body>
+</html>
