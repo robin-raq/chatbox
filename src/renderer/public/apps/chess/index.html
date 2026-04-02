@@ -150,20 +150,43 @@
       } catch (e) {
         console.error('[Chess] Failed to init Stockfish:', e.message);
         stockfish = null;
+        document.getElementById('status').textContent = 'Engine unavailable \u2014 play both sides manually';
+        document.getElementById('status').className = 'status';
       }
     }
 
+    var engineTimeout = null;
+
     function askEngineToMove() {
-      if (!stockfish || !game || game.game_over()) return;
+      if (!stockfish || !game || game.game_over()) {
+        if (!stockfish) {
+          // No engine — let user play both sides
+          document.getElementById('status').textContent = 'Your turn (both sides \u2014 engine unavailable)';
+          document.getElementById('status').className = 'status';
+          playerColor = game.turn(); // Allow clicking either color
+        }
+        return;
+      }
       engineThinking = true;
       document.getElementById('status').textContent = 'Engine thinking...';
       document.getElementById('status').className = 'status thinking';
       stockfish.postMessage('position fen ' + game.fen());
       stockfish.postMessage('go depth 10');
+      // 10-second timeout in case engine hangs
+      engineTimeout = setTimeout(function() {
+        if (engineThinking) {
+          engineThinking = false;
+          playerColor = game.turn();
+          document.getElementById('status').textContent = 'Engine timed out \u2014 play both sides';
+          document.getElementById('status').className = 'status';
+          console.warn('[Chess] Engine move timed out');
+        }
+      }, 10000);
     }
 
     function applyEngineMove(uciMove) {
       engineThinking = false;
+      if (engineTimeout) { clearTimeout(engineTimeout); engineTimeout = null; }
       if (!game) return;
       var from = uciMove.substring(0, 2);
       var to = uciMove.substring(2, 4);
