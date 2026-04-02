@@ -28,6 +28,19 @@
     .track-name { font-size: 14px; font-weight: 500; }
     .track-artist { font-size: 12px; color: #b3b3b3; }
     .track-duration { font-size: 12px; color: #b3b3b3; }
+    .play-btn { width: 32px; height: 32px; border-radius: 50%; border: none; background: #1db954; color: white; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .play-btn:hover { background: #1ed760; transform: scale(1.05); }
+    .playing { color: #1db954; }
+    .now-playing-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #181818; border-top: 1px solid #282828; padding: 8px 16px; display: none; align-items: center; gap: 12px; z-index: 100; }
+    .now-playing-bar.active { display: flex; }
+    .np-info { flex: 1; min-width: 0; }
+    .np-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .np-artist { font-size: 11px; color: #b3b3b3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .np-controls { display: flex; align-items: center; gap: 8px; }
+    .np-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: #1db954; color: white; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .np-btn:hover { background: #1ed760; }
+    .np-btn.small { width: 28px; height: 28px; font-size: 12px; background: transparent; color: #b3b3b3; }
+    .np-btn.small:hover { color: white; background: #333; }
     .playlist { background: #282828; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
     .playlist-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
     .playlist-meta { font-size: 12px; color: #b3b3b3; }
@@ -54,16 +67,89 @@
     </div>
   </div>
 
+  <div id="now-playing-bar" class="now-playing-bar">
+    <div class="np-info">
+      <div id="np-title" class="np-title">Not playing</div>
+      <div id="np-artist" class="np-artist"></div>
+    </div>
+    <div class="np-controls">
+      <button class="np-btn" id="np-toggle" onclick="togglePlayback()">⏸</button>
+    </div>
+  </div>
+
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
   <script src="/apps/sdk/chatbridge-app-sdk.js"></script>
   <script>
-    var isConnected = false;
+    var accessToken = null;
+    var refreshToken = null;
+    var tokenExpiresAt = 0;
+    var spotifyPlayer = null;
+    var playerDeviceId = null;
+    var playerReady = false;
     var currentPlaylist = null;
+    var currentPlaylistId = null;
     var playlistTracks = [];
+    var refreshPromise = null;
 
     function connectSpotify() {
-      // In production: opens OAuth popup via platform
-      // For now: simulate connection
-      isConnected = true;
+      // Open OAuth popup — backend handles the redirect
+      var popup = window.open('/api/spotify/auth', 'spotify_auth', 'width=500,height=700');
+      // Listen for tokens from the callback page
+      window.addEventListener('message', function handler(event) {
+        if (event.data && event.data.type === 'spotify_auth') {
+          window.removeEventListener('message', handler);
+          var data = event.data.data;
+          if (data.error) {
+            showAuthError('Connection failed: ' + data.error);
+            return;
+          }
+          accessToken = data.access_token;
+          refreshToken = data.refresh_token;
+          tokenExpiresAt = Date.now() + (data.expires_in * 1000);
+          showConnected();
+          initPlayer();
+          ChatBridge.sendContextUpdate({ event: 'connected' });
+        }
+      });
+    }
+
+    function initPlayer() {
+      if (!accessToken || spotifyPlayer) return;
+      spotifyPlayer = new Spotify.Player({
+        name: 'ChatBridge Player',
+        getOAuthToken: function(cb) { cb(accessToken); },
+        volume: 0.5,
+      });
+      spotifyPlayer.addListener('ready', function(data) {
+        playerDeviceId = data.device_id;
+        playerReady = true;
+        console.log('[Spotify] Player ready, device:', playerDeviceId);
+      });
+      spotifyPlayer.addListener('not_ready', function() {
+        playerReady = false;
+        console.log('[Spotify] Player not ready');
+      });
+      spotifyPlayer.addListener('initialization_error', function(e) { console.error('[Spotify] Init error:', e.message); });
+      spotifyPlayer.addListener('authentication_error', function(e) { console.error('[Spotify] Auth error:', e.message); });
+      spotifyPlayer.addListener('account_error', function(e) { console.error('[Spotify] Account error (Premium required):', e.message); });
+      spotifyPlayer.addListener('player_state_changed', function(state) {
+        if (state && state.track_window && state.track_window.current_track) {
+          var t = state.track_window.current_track;
+          updateNowPlaying(t.name, t.artists.map(function(a){ return a.name; }).join(', '), !state.paused);
+        } else {
+          updateNowPlaying('', '', false);
+        }
+      });
+      spotifyPlayer.connect();
+    }
+
+    // SDK ready callback — called by the Spotify SDK script
+    window.onSpotifyWebPlaybackSDKReady = function() {
+      console.log('[Spotify] SDK loaded');
+      if (accessToken) initPlayer();
+    };
+
+    function showConnected() {
       var authSection = document.getElementById('auth-section');
       while (authSection.firstChild) authSection.removeChild(authSection.firstChild);
       var dot = document.createElement('span');
@@ -71,15 +157,110 @@
       authSection.appendChild(dot);
       var text = document.createElement('span');
       text.className = 'connected-text';
-      text.textContent = 'Connected as Demo User';
+      text.textContent = 'Connected to Spotify';
       authSection.appendChild(text);
       authSection.className = 'connected';
-      ChatBridge.sendContextUpdate({ event: 'connected', user: 'Demo User' });
+    }
+
+    function showAuthError(msg) {
+      var authSection = document.getElementById('auth-section');
+      while (authSection.firstChild) authSection.removeChild(authSection.firstChild);
+      var p = document.createElement('p');
+      p.textContent = msg;
+      p.style.color = '#ef4444';
+      p.style.fontSize = '13px';
+      authSection.appendChild(p);
+      var btn = document.createElement('button');
+      btn.className = 'auth-btn';
+      btn.textContent = 'Try Again';
+      btn.onclick = connectSpotify;
+      authSection.appendChild(btn);
+    }
+
+    function ensureToken() {
+      if (!accessToken) return Promise.reject(new Error('Not connected'));
+      if (Date.now() < tokenExpiresAt - 60000) return Promise.resolve();
+      // Token expired or expiring soon — refresh
+      if (refreshPromise) return refreshPromise;
+      refreshPromise = fetch('/api/spotify/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.access_token) {
+          accessToken = data.access_token;
+          tokenExpiresAt = Date.now() + (data.expires_in * 1000);
+        }
+        refreshPromise = null;
+      })
+      .catch(function(err) {
+        refreshPromise = null;
+        throw err;
+      });
+      return refreshPromise;
+    }
+
+    function msToTime(ms) {
+      var min = Math.floor(ms / 60000);
+      var sec = Math.floor((ms % 60000) / 1000);
+      return min + ':' + (sec < 10 ? '0' : '') + sec;
+    }
+
+    var isPlaying = false;
+    var currentTrackName = '';
+    var currentTrackArtist = '';
+
+    function updateNowPlaying(name, artist, playing) {
+      currentTrackName = name || '';
+      currentTrackArtist = artist || '';
+      isPlaying = playing;
+      var bar = document.getElementById('now-playing-bar');
+      document.getElementById('np-title').textContent = name || 'Not playing';
+      document.getElementById('np-artist').textContent = artist || '';
+      document.getElementById('np-toggle').textContent = playing ? '⏸' : '▶';
+      bar.className = name ? 'now-playing-bar active' : 'now-playing-bar';
+    }
+
+    function togglePlayback() {
+      if (spotifyPlayer) {
+        spotifyPlayer.togglePlay().then(function() {
+          isPlaying = !isPlaying;
+          document.getElementById('np-toggle').textContent = isPlaying ? '⏸' : '▶';
+        });
+      }
+    }
+
+    function playTrack(uri, name, artist) {
+      if (!accessToken) return;
+      ensureToken().then(function() {
+        var body = { uris: [uri] };
+        var url = '/api/spotify/play';
+        if (playerDeviceId) {
+          url += '?device_id=' + playerDeviceId;
+        }
+        return fetch(url, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+          body: JSON.stringify(body),
+        });
+      }).then(function(res) {
+        if (res && res.ok) {
+          updateNowPlaying(name || 'Playing', artist || '', true);
+        } else if (res) {
+          return res.json().then(function(d) {
+            var msg = (d.error && d.error.message) || 'Playback failed';
+            if (msg.indexOf('No active device') >= 0 || msg.indexOf('Player command failed') >= 0) {
+              alert('Please wait a moment for the player to connect, then try again.');
+            }
+          });
+        }
+      });
     }
 
     function renderTracks(tracks, title) {
       var content = document.getElementById('content');
-      // Keep auth section, clear the rest
       var authSection = document.getElementById('auth-section');
       while (content.firstChild) content.removeChild(content.firstChild);
       content.appendChild(authSection);
@@ -95,10 +276,19 @@
         var li = document.createElement('li');
         li.className = 'track';
 
-        var num = document.createElement('span');
-        num.className = 'track-num';
-        num.textContent = (i + 1).toString();
-        li.appendChild(num);
+        // Play button
+        if (track.uri) {
+          var playBtn = document.createElement('button');
+          playBtn.className = 'play-btn';
+          playBtn.textContent = '▶';
+          playBtn.onclick = (function(t) { return function() { playTrack(t.uri, t.name, t.artist); }; })(track);
+          li.appendChild(playBtn);
+        } else {
+          var num = document.createElement('span');
+          num.className = 'track-num';
+          num.textContent = (i + 1).toString();
+          li.appendChild(num);
+        }
 
         var art = document.createElement('div');
         art.className = 'track-art';
@@ -148,73 +338,131 @@
       renderTracks(tracks, 'Playlist Tracks');
     }
 
-    // Mock data
-    function mockSearch(query) {
-      var q = query.toLowerCase();
-      var genres = {
-        'study': [
-          { name: 'Lo-fi Beats to Study To', artist: 'ChilledCow', duration: '3:22' },
-          { name: 'Calm Focus', artist: 'Brain Food', duration: '4:15' },
-          { name: 'Deep Concentration', artist: 'Study Music', duration: '5:01' },
-          { name: 'Ambient Study', artist: 'Quiet Hours', duration: '3:45' },
-          { name: 'Piano Focus', artist: 'Classical Study', duration: '4:30' },
-        ],
-        'chill': [
-          { name: 'Sunset Vibes', artist: 'Chill Nation', duration: '3:18' },
-          { name: 'Ocean Breeze', artist: 'Nature Sounds', duration: '4:02' },
-          { name: 'Lazy Sunday', artist: 'Relax FM', duration: '3:55' },
-          { name: 'Coffee Shop Jazz', artist: 'Jazz Café', duration: '4:22' },
-          { name: 'Evening Wind Down', artist: 'Calm Collective', duration: '3:40' },
-        ],
-      };
-      // Return matching genre or default
-      for (var key in genres) {
-        if (q.indexOf(key) >= 0) return genres[key];
-      }
-      return [
-        { name: query + ' Mix', artist: 'Various Artists', duration: '3:30' },
-        { name: 'Best of ' + query, artist: 'Playlist Radio', duration: '4:00' },
-        { name: query + ' Essentials', artist: 'Curated', duration: '3:45' },
-        { name: 'Discover ' + query, artist: 'Weekly Mix', duration: '3:22' },
-        { name: query + ' Vibes', artist: 'Mood Music', duration: '4:10' },
-      ];
-    }
+    // Track URI cache for add_to_playlist
+    var lastSearchResults = [];
 
-    // Tool handlers
+    // Tool handlers — real Spotify API via backend proxy
     ChatBridge.onToolCall('search_tracks', function(params) {
-      if (!isConnected) {
-        return 'User needs to connect their Spotify account first. The Connect button is shown in the side panel.';
+      if (!accessToken) {
+        // Auto-trigger the connect flow
+        connectSpotify();
+        return 'The Spotify authorization popup has opened. Tell the user to log in to Spotify in the popup window and authorize the app. Once they see "Connected" in the side panel, ask them to say "ready" and then retry this tool call.';
       }
       var query = params.query || '';
-      var tracks = mockSearch(query);
-      renderTracks(tracks, 'Results for "' + query + '"');
-      return 'Found ' + tracks.length + ' tracks for "' + query + '". Results are shown in the side panel: ' + tracks.map(function(t) { return t.name + ' by ' + t.artist; }).join(', ') + '.';
+      return ensureToken().then(function() {
+        return fetch('/api/spotify/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+          body: JSON.stringify({ query: query, type: 'track', limit: 10 }),
+        });
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        var items = (data.tracks && data.tracks.items) || [];
+        lastSearchResults = items;
+        var tracks = items.map(function(t) {
+          return {
+            name: t.name,
+            artist: t.artists.map(function(a) { return a.name; }).join(', '),
+            duration: msToTime(t.duration_ms),
+            uri: t.uri,
+          };
+        });
+        renderTracks(tracks, 'Results for "' + query + '"');
+        return 'Found ' + tracks.length + ' tracks for "' + query + '": ' + tracks.slice(0, 5).map(function(t) { return t.name + ' by ' + t.artist; }).join(', ') + '.';
+      })
+      .catch(function(err) {
+        return 'Spotify search failed: ' + err.message;
+      });
     });
 
     ChatBridge.onToolCall('create_playlist', function(params) {
-      if (!isConnected) {
-        return 'User needs to connect their Spotify account first. The Connect button is shown in the side panel.';
+      console.log('[Spotify] create_playlist called, accessToken:', accessToken ? 'SET (' + accessToken.substring(0,10) + '...)' : 'NULL');
+      if (!accessToken) {
+        connectSpotify();
+        return 'The Spotify authorization popup has opened. Tell the user to log in to Spotify in the popup window and authorize the app. Once they see "Connected" in the side panel, ask them to say "ready" and then retry this tool call.';
       }
       var name = params.name || 'My Playlist';
-      currentPlaylist = name;
-      playlistTracks = [];
-      renderPlaylist(name, playlistTracks);
-      return 'Created playlist "' + name + '". It is currently empty. Use add_to_playlist to add tracks.';
+      console.log('[Spotify] Creating playlist:', name, 'with token:', accessToken.substring(0,10) + '...');
+      return ensureToken().then(function() {
+        return fetch('/api/spotify/playlists', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+          body: JSON.stringify({ name: name, description: 'Created by ChatBridge' }),
+        });
+      })
+      .then(function(res) {
+        console.log('[Spotify] Playlist API response status:', res.status);
+        return res.json();
+      })
+      .then(function(playlist) {
+        console.log('[Spotify] Create playlist response:', JSON.stringify(playlist));
+        if (playlist.error) return 'Failed to create playlist: ' + JSON.stringify(playlist.error);
+        currentPlaylist = playlist.name;
+        currentPlaylistId = playlist.id;
+        playlistTracks = [];
+        renderPlaylist(currentPlaylist, playlistTracks);
+        return 'Created playlist "' + currentPlaylist + '" on Spotify. Use add_to_playlist to add tracks.';
+      })
+      .catch(function(err) {
+        return 'Failed to create playlist: ' + err.message;
+      });
     });
 
     ChatBridge.onToolCall('add_to_playlist', function(params) {
-      if (!isConnected) {
+      if (!accessToken) {
         return 'User needs to connect their Spotify account first.';
       }
-      if (!currentPlaylist) {
+      if (!currentPlaylistId) {
         return 'No playlist is active. Create one first with create_playlist.';
       }
-      var trackName = params.track_name || 'Unknown Track';
-      var artist = params.artist || 'Unknown Artist';
-      playlistTracks.push({ name: trackName, artist: artist, duration: '3:30' });
-      renderPlaylist(currentPlaylist, playlistTracks);
-      return 'Added "' + trackName + '" by ' + artist + ' to playlist "' + currentPlaylist + '". Playlist now has ' + playlistTracks.length + ' tracks.';
+      var trackName = params.track_name || '';
+      var artist = params.artist || '';
+
+      // Find track URI from last search results
+      var match = lastSearchResults.find(function(t) {
+        var nameMatch = t.name.toLowerCase().indexOf(trackName.toLowerCase()) >= 0;
+        var artistMatch = !artist || t.artists.some(function(a) { return a.name.toLowerCase().indexOf(artist.toLowerCase()) >= 0; });
+        return nameMatch && artistMatch;
+      });
+
+      if (!match) {
+        // Search for the track first
+        return ensureToken().then(function() {
+          return fetch('/api/spotify/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+            body: JSON.stringify({ query: trackName + ' ' + artist, type: 'track', limit: 1 }),
+          });
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          var items = (data.tracks && data.tracks.items) || [];
+          if (items.length === 0) return 'Could not find track "' + trackName + '"';
+          return addTrackToPlaylist(items[0]);
+        });
+      }
+
+      return ensureToken().then(function() { return addTrackToPlaylist(match); });
     });
+
+    function addTrackToPlaylist(track) {
+      return fetch('/api/spotify/playlists/' + currentPlaylistId + '/tracks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+        body: JSON.stringify({ uris: [track.uri] }),
+      })
+      .then(function(res) { return res.json(); })
+      .then(function() {
+        var t = { name: track.name, artist: track.artists.map(function(a) { return a.name; }).join(', '), duration: msToTime(track.duration_ms), uri: track.uri };
+        playlistTracks.push(t);
+        renderPlaylist(currentPlaylist, playlistTracks);
+        return 'Added "' + t.name + '" by ' + t.artist + ' to "' + currentPlaylist + '". Playlist now has ' + playlistTracks.length + ' tracks.';
+      })
+      .catch(function(err) {
+        return 'Failed to add track: ' + err.message;
+      });
+    }
   </script>
 </body>
 </html>
