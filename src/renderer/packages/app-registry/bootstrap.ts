@@ -8,7 +8,7 @@ import type { AppManifest } from './types'
 const CHESS_MANIFEST: AppManifest = {
   id: 'chess',
   name: 'Chess',
-  description: 'Play an interactive chess game against the user. A visual board appears in the side panel — never render the board as text. When the user makes a move on the board, you will receive a context update. You should then call get_board_state to see the position, then call make_move to play your move as the opponent. Play at a casual/intermediate level. Always describe moves in natural language.',
+  description: 'Play chess against the user. A visual board appears in the side panel — NEVER render the board as text. IMPORTANT: Before EVERY move you make, you MUST call get_board_state first to see the current position, then call get_legal_moves, then call make_move with a legal move. The user moves by clicking pieces on the board. When the user tells you they moved or says "your turn", always call get_board_state first. Play at a casual level.',
   icon: '♟',
   uiUrl: '/apps/chess/index.html',
   authTier: 'internal',
@@ -42,7 +42,7 @@ const CHESS_MANIFEST: AppManifest = {
     },
     {
       name: 'get_board_state',
-      description: 'Get the current chess board position, whose turn it is, and the move history.',
+      description: 'Get the current board position. ALWAYS call this before making a move to see what the user played.',
       inputSchema: {
         type: 'object',
         properties: {},
