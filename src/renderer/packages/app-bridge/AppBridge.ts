@@ -67,6 +67,9 @@ export class AppBridge {
 
   private startListening(): void {
     this.messageListener = (event: MessageEvent) => {
+      // Only handle messages from *this* iframe (multiple AppBridge instances listen on window)
+      if (event.source !== this.iframe.contentWindow) return
+
       const data = event.data
       if (!data || typeof data !== 'object' || !('type' in data)) return
       if (!VALID_INCOMING_TYPES.includes(data.type)) return
