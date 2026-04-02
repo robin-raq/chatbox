@@ -45,6 +45,10 @@
   <script>
     var canvas = document.getElementById('canvas');
     var ctx = canvas.getContext('2d');
+    if (!ctx) {
+      document.getElementById('status').textContent = 'Drawing not supported in this browser';
+      document.querySelector('.toolbar').style.display = 'none';
+    }
     var drawing = false;
     var currentTool = 'pen';
     var currentColor = '#1a1f36';
