@@ -91,10 +91,58 @@
     var playlistTracks = [];
     var refreshPromise = null;
 
+    // Persist tokens to localStorage so they survive iframe reloads
+    function saveTokens() {
+      try {
+        localStorage.setItem('spotify_tokens', JSON.stringify({
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+          tokenExpiresAt: tokenExpiresAt,
+        }));
+      } catch(e) {}
+    }
+
+    function loadTokens() {
+      try {
+        var saved = JSON.parse(localStorage.getItem('spotify_tokens') || 'null');
+        if (saved && saved.accessToken) {
+          accessToken = saved.accessToken;
+          refreshToken = saved.refreshToken;
+          tokenExpiresAt = saved.tokenExpiresAt || 0;
+          return true;
+        }
+      } catch(e) {}
+      return false;
+    }
+
     function connectSpotify() {
-      // Open OAuth popup — backend handles the redirect
+      // If we have saved tokens, try to reuse them
+      if (loadTokens() && Date.now() < tokenExpiresAt - 60000) {
+        showConnected();
+        initPlayer();
+        ChatBridge.sendContextUpdate({ event: 'connected' });
+        return;
+      }
+      // If we have a refresh token, try refreshing first
+      if (refreshToken) {
+        ensureToken().then(function() {
+          if (accessToken) {
+            showConnected();
+            initPlayer();
+            ChatBridge.sendContextUpdate({ event: 'connected' });
+          } else {
+            openOAuthPopup();
+          }
+        }).catch(function() {
+          openOAuthPopup();
+        });
+        return;
+      }
+      openOAuthPopup();
+    }
+
+    function openOAuthPopup() {
       var popup = window.open('/api/spotify/auth', 'spotify_auth', 'width=500,height=700');
-      // Listen for tokens from the callback page
       window.addEventListener('message', function handler(event) {
         if (event.data && event.data.type === 'spotify_auth') {
           window.removeEventListener('message', handler);
@@ -106,6 +154,7 @@
           accessToken = data.access_token;
           refreshToken = data.refresh_token;
           tokenExpiresAt = Date.now() + (data.expires_in * 1000);
+          saveTokens();
           showConnected();
           initPlayer();
           ChatBridge.sendContextUpdate({ event: 'connected' });
@@ -192,6 +241,7 @@
         if (data.access_token) {
           accessToken = data.access_token;
           tokenExpiresAt = Date.now() + (data.expires_in * 1000);
+          saveTokens();
         }
         refreshPromise = null;
       })
@@ -445,6 +495,19 @@
 
       return ensureToken().then(function() { return addTrackToPlaylist(match); });
     });
+
+    // Auto-connect on iframe load if tokens are saved
+    if (loadTokens()) {
+      console.log('[Spotify] Found saved tokens, auto-connecting...');
+      if (Date.now() < tokenExpiresAt - 60000) {
+        showConnected();
+        // initPlayer will be called when SDK is ready (onSpotifyWebPlaybackSDKReady)
+      } else if (refreshToken) {
+        ensureToken().then(function() {
+          if (accessToken) showConnected();
+        });
+      }
+    }
 
     function addTrackToPlaylist(track) {
       return fetch('/api/spotify/playlists/' + currentPlaylistId + '/tracks', {
