@@ -121,7 +121,7 @@ export function getAppToolSet(): ToolSet {
 
           const bridge = activeBridges.get(app.id)
           if (!bridge) {
-            return { error: `App ${app.name} is not connected` }
+            return { error: `${app.name} app is not connected. The app panel may need to be reopened. Tell the user to try again.` }
           }
 
           // Send tool call and wait for result
@@ -131,7 +131,7 @@ export function getAppToolSet(): ToolSet {
             setTimeout(() => {
               if (pendingCalls.has(callId)) {
                 pendingCalls.delete(callId)
-                resolve({ error: `Tool call timed out after 30 seconds` })
+                resolve({ error: `${app.name} did not respond within 30 seconds. The app may have crashed. Try asking again or close and reopen the app panel.` })
               }
             }, 30000)
           })
