@@ -8,6 +8,7 @@
  */
 import { tool, type ToolSet } from 'ai'
 import z from 'zod'
+import { v4 as uuidv4 } from 'uuid'
 import { uiStore } from '@/stores/uiStore'
 import { AppBridge } from '../app-bridge/AppBridge'
 import { appRegistry } from './registry'
@@ -38,8 +39,11 @@ export function connectBridge(appId: string, iframe: HTMLIFrameElement): void {
   })
 
   bridge.onContextUpdate((msg) => {
-    // Store context updates so the LLM has fresh state
     console.debug(`[ChatBridge] context_update from ${appId}:`, msg.data)
+    // Auto-trigger AI response for chess moves
+    if (appId === 'chess' && msg.data && msg.data.last_move) {
+      autoRespondToMove(msg.data)
+    }
   })
 
   bridge.onCompletion((msg) => {
@@ -137,6 +141,41 @@ export function getAppToolSet(): ToolSet {
   }
 
   return tools
+}
+
+/** Auto-respond to a chess move by injecting a user message and triggering AI generation */
+async function autoRespondToMove(data: Record<string, unknown>) {
+  try {
+    const { submitNewUserMessage } = await import('@/stores/session/messages')
+    const { currentSessionIdAtom } = await import('@/stores/atoms/sessionAtoms')
+    const jotai = await import('jotai')
+
+    // Get current session ID from the jotai atom store
+    // We need to access it through the default store
+    const { getDefaultStore } = jotai
+    const store = getDefaultStore()
+    const sessionId = store.get(currentSessionIdAtom)
+    if (!sessionId) return
+
+    const move = data.last_move || 'unknown'
+    const turn = data.turn || ''
+
+    // Create a user message describing the move
+    const userMsg = {
+      id: uuidv4(),
+      role: 'user' as const,
+      contentParts: [{ type: 'text' as const, text: `I played ${move}. Your turn.` }],
+    }
+
+    console.debug(`[ChatBridge] Auto-submitting move message: "I played ${move}"`)
+
+    await submitNewUserMessage(sessionId, {
+      newUserMsg: userMsg as any,
+      needGenerating: true,
+    })
+  } catch (err) {
+    console.error('[ChatBridge] Auto-respond error:', err)
+  }
 }
 
 /** Wait for a bridge to be connected (iframe loaded) */
