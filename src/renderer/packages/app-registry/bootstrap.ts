@@ -8,7 +8,7 @@ import type { AppManifest } from './types'
 const CHESS_MANIFEST: AppManifest = {
   id: 'chess',
   name: 'Chess',
-  description: 'Interactive chess game with a built-in Stockfish engine. The user plays against the engine — the engine responds automatically after each user move. You do NOT need to make moves. Your role is to start the game and act as a chess coach: analyze positions, give advice when asked, and comment on the game. Use get_board_state to see the current position when the user asks for help.',
+  description: 'Interactive chess game with a built-in Stockfish engine. The engine plays automatically — you do NOT make moves. IMPORTANT: When the user asks ANY question about the chess game (advice, analysis, what to do, position), you MUST call get_board_state first to see the CURRENT position. Never guess the position from memory.',
   icon: '♟',
   uiUrl: '/apps/chess/index.html',
   authTier: 'internal',
@@ -42,7 +42,7 @@ const CHESS_MANIFEST: AppManifest = {
     },
     {
       name: 'get_board_state',
-      description: 'Get the current board position. ALWAYS call this before making a move to see what the user played.',
+      description: 'Get the CURRENT chess position, moves played, and whose turn it is. ALWAYS call this when the user asks anything about the chess game — never rely on memory.',
       inputSchema: {
         type: 'object',
         properties: {},

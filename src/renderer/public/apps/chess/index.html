@@ -19,19 +19,59 @@
     .square.legal::after { content: ''; position: absolute; width: 30%; height: 30%; background: rgba(0,0,0,0.2); border-radius: 50%; }
     .square.last-move { background: rgba(155, 199, 0, 0.4) !important; }
     .square:hover { opacity: 0.85; }
-    .info { text-align: center; margin-top: 12px; font-size: 12px; color: #64748b; }
+    .board-wrapper { position: relative; width: 100%; max-width: 412px; margin: 0 auto; }
+    .coord-row { display: flex; justify-content: space-around; padding: 0 16px; }
+    .coord-col { display: flex; flex-direction: column; justify-content: space-around; position: absolute; left: 0; top: 0; bottom: 0; width: 14px; }
+    .coord { font-size: 10px; color: #94a3b8; text-align: center; line-height: 1; }
+    .board { margin-left: 14px; }
+    .last-move-text { text-align: center; margin-top: 6px; font-size: 13px; color: #1a1f36; font-weight: 500; min-height: 20px; }
+    .info { text-align: center; margin-top: 4px; font-size: 11px; color: #94a3b8; }
     .game-over { text-align: center; padding: 12px; font-size: 16px; font-weight: 600; color: #1a1f36; background: #e0e7ff; border-radius: 6px; margin-bottom: 12px; }
-    .controls { text-align: center; margin-top: 12px; }
+    .controls { text-align: center; margin-top: 10px; display: flex; justify-content: center; gap: 8px; }
     .controls button { padding: 6px 16px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 4px; background: white; cursor: pointer; }
     .controls button:hover { background: #f1f5f9; }
+    .controls button.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+    .help-panel { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-top: 12px; font-size: 12px; color: #334155; display: none; }
+    .help-panel.visible { display: block; }
+    .help-panel h3 { font-size: 14px; margin-bottom: 8px; color: #1a1f36; }
+    .help-panel table { width: 100%; border-collapse: collapse; }
+    .help-panel td { padding: 3px 6px; border-bottom: 1px solid #f1f5f9; }
+    .help-panel td:first-child { font-weight: 600; font-family: monospace; width: 60px; color: #3b82f6; }
+    .help-panel .tip { margin-top: 8px; padding: 8px; background: #f0f9ff; border-radius: 4px; font-size: 11px; color: #0369a1; }
   </style>
 </head>
 <body>
   <div id="status" class="status">Waiting for game to start...</div>
-  <div id="board" class="board"></div>
+  <div class="board-wrapper">
+    <div class="coord-col" id="rank-labels"></div>
+    <div id="board" class="board"></div>
+    <div class="coord-row" id="file-labels"></div>
+  </div>
+  <div id="last-move-text" class="last-move-text"></div>
   <div id="info" class="info"></div>
   <div class="controls">
     <button onclick="requestNewGame()">New Game</button>
+    <button id="help-btn" onclick="toggleHelp()">? Help</button>
+  </div>
+  <div id="help-panel" class="help-panel">
+    <h3>Chess Notation Guide</h3>
+    <table>
+      <tr><td>K</td><td>King</td></tr>
+      <tr><td>Q</td><td>Queen</td></tr>
+      <tr><td>R</td><td>Rook (castle piece)</td></tr>
+      <tr><td>B</td><td>Bishop (diagonal piece)</td></tr>
+      <tr><td>N</td><td>Knight (L-shaped jumper)</td></tr>
+      <tr><td>e4</td><td>Pawn moves to e4 (pawns have no letter)</td></tr>
+      <tr><td>Nf3</td><td>Knight moves to f3</td></tr>
+      <tr><td>Bxe5</td><td>Bishop captures on e5 (x = capture)</td></tr>
+      <tr><td>O-O</td><td>Kingside castling (short)</td></tr>
+      <tr><td>O-O-O</td><td>Queenside castling (long)</td></tr>
+      <tr><td>+</td><td>Check</td></tr>
+      <tr><td>#</td><td>Checkmate</td></tr>
+    </table>
+    <div class="tip">
+      <strong>Tip:</strong> Click a piece to see its legal moves (shown as dots). Columns are labeled a-h (left to right), rows 1-8 (bottom to top). Ask the chatbot for advice anytime!
+    </div>
   </div>
 
   <script src="/apps/sdk/chatbridge-app-sdk.js"></script>
@@ -47,6 +87,47 @@
 
     var PIECES = { p: '\u265F', r: '\u265C', n: '\u265E', b: '\u265D', q: '\u265B', k: '\u265A',
                    P: '\u2659', R: '\u2656', N: '\u2658', B: '\u2657', Q: '\u2655', K: '\u2654' };
+
+    var PIECE_NAMES = { p: 'Pawn', r: 'Rook', n: 'Knight', b: 'Bishop', q: 'Queen', k: 'King' };
+
+    function describeMoveInEnglish(move) {
+      var piece = PIECE_NAMES[move.piece] || 'Piece';
+      var color = move.color === 'w' ? 'White' : 'Black';
+      var action = move.captured ? 'captures on' : 'moves to';
+      if (move.san === 'O-O') return color + ' castles kingside';
+      if (move.san === 'O-O-O') return color + ' castles queenside';
+      var desc = color + ' ' + piece + ' ' + action + ' ' + move.to;
+      if (move.captured) desc += ' (takes ' + PIECE_NAMES[move.captured] + ')';
+      if (move.san.indexOf('+') >= 0) desc += ' — Check!';
+      if (move.san.indexOf('#') >= 0) desc += ' — Checkmate!';
+      return desc;
+    }
+
+    function renderCoordinates() {
+      var files = document.getElementById('file-labels');
+      var ranks = document.getElementById('rank-labels');
+      while (files.firstChild) files.removeChild(files.firstChild);
+      while (ranks.firstChild) ranks.removeChild(ranks.firstChild);
+      var letters = ['a','b','c','d','e','f','g','h'];
+      for (var i = 0; i < 8; i++) {
+        var fc = document.createElement('span');
+        fc.className = 'coord';
+        fc.textContent = letters[i];
+        files.appendChild(fc);
+        var rc = document.createElement('span');
+        rc.className = 'coord';
+        rc.textContent = String(8 - i);
+        ranks.appendChild(rc);
+      }
+    }
+
+    function toggleHelp() {
+      var panel = document.getElementById('help-panel');
+      var btn = document.getElementById('help-btn');
+      var visible = panel.className.indexOf('visible') >= 0;
+      panel.className = visible ? 'help-panel' : 'help-panel visible';
+      btn.className = visible ? '' : 'active';
+    }
 
     // ─── Stockfish Engine ───────────────────────────────────
     function initEngine() {
@@ -91,6 +172,7 @@
       if (move) {
         lastMoveFrom = from;
         lastMoveTo = to;
+        document.getElementById('last-move-text').textContent = describeMoveInEnglish(move);
         selectedSquare = null;
         legalMoves = [];
         renderBoard();
@@ -154,6 +236,7 @@
           lastMoveTo = sq;
           selectedSquare = null;
           legalMoves = [];
+          document.getElementById('last-move-text').textContent = describeMoveInEnglish(move);
           renderBoard();
           sendMoveUpdate(move);
           checkGameOver();
@@ -267,6 +350,7 @@
 
     // ─── Init ───────────────────────────────────────────────
     game = new Chess();
+    renderCoordinates();
     renderBoard();
     initEngine();
   </script>
