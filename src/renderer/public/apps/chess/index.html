@@ -146,18 +146,41 @@
     });
 
     ChatBridge.onToolCall('make_move', function(params) {
-      if (!game) return { error: 'No game in progress' };
-      var move = game.move({ from: params.from, to: params.to, promotion: params.promotion || 'q' });
-      if (!move) {
-        var moveSan = game.move(params.move || params.san);
-        if (!moveSan) return { error: 'Invalid move: ' + (params.from ? params.from + '-' + params.to : params.move) };
-        move = moveSan;
+      if (!game) return 'No game in progress. Call start_game first.';
+      console.log('[Chess] make_move called with params:', JSON.stringify(params));
+      var move = null;
+
+      // Try from/to format first
+      if (params.from && params.to) {
+        move = game.move({ from: params.from, to: params.to, promotion: params.promotion || 'q' });
       }
+
+      // Try SAN notation (e.g., "e4", "Nf3", "O-O")
+      if (!move && params.move) {
+        move = game.move(params.move);
+      }
+      if (!move && params.san) {
+        move = game.move(params.san);
+      }
+
+      // Try the "from" field as SAN (AI sometimes puts SAN in "from")
+      if (!move && params.from && !params.to) {
+        move = game.move(params.from);
+      }
+
+      if (!move) {
+        var attempted = params.move || params.san || (params.from + (params.to ? '-' + params.to : ''));
+        console.log('[Chess] Invalid move:', attempted, 'Legal moves:', game.moves().join(', '));
+        return 'Invalid move: ' + attempted + '. Legal moves are: ' + game.moves().slice(0, 10).join(', ');
+      }
+
+      console.log('[Chess] Move made:', move.san);
       selectedSquare = null;
       legalMoves = [];
       renderBoard();
       checkGameOver();
-      return { fen: game.fen(), move: move.san, game_over: game.game_over() };
+      var turnText = game.turn() === 'w' ? 'White' : 'Black';
+      return 'Moved ' + move.san + '. ' + turnText + ' to move.' + (game.in_check() ? ' Check!' : '') + (game.game_over() ? ' Game over!' : '');
     });
 
     ChatBridge.onToolCall('get_board_state', function() {

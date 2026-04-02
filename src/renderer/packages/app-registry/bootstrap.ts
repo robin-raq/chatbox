@@ -29,14 +29,15 @@ const CHESS_MANIFEST: AppManifest = {
     },
     {
       name: 'make_move',
-      description: 'Make a chess move on the board.',
+      description: 'Make a chess move on the board. Use standard algebraic notation (SAN) like "e4", "Nf3", "O-O", "Bxe5". The move parameter is preferred over from/to.',
       inputSchema: {
         type: 'object',
         properties: {
-          from: { type: 'string', description: 'Source square (e.g., "e2")' },
-          to: { type: 'string', description: 'Destination square (e.g., "e4")' },
+          move: { type: 'string', description: 'Move in standard algebraic notation (e.g., "e4", "Nf3", "O-O", "Bxe5")' },
+          from: { type: 'string', description: 'Source square (e.g., "e2") — alternative to move parameter' },
+          to: { type: 'string', description: 'Destination square (e.g., "e4") — use with from parameter' },
         },
-        required: ['from', 'to'],
+        required: ['move'],
       },
     },
     {
