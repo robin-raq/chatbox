@@ -17,6 +17,9 @@ import type { AppManifest, AppToolDefinition } from './types'
 /** Active bridges keyed by app ID */
 const activeBridges = new Map<string, AppBridge>()
 
+/** Suppress auto-respond during AI tool execution to prevent loops */
+let suppressAutoRespond = false
+
 /** Pending tool call resolvers keyed by call ID */
 const pendingCalls = new Map<string, { resolve: (result: unknown) => void; reject: (err: Error) => void }>()
 
@@ -40,8 +43,9 @@ export function connectBridge(appId: string, iframe: HTMLIFrameElement): void {
 
   bridge.onContextUpdate((msg) => {
     console.debug(`[ChatBridge] context_update from ${appId}:`, msg.data)
-    // Auto-trigger AI response for chess moves
-    if (appId === 'chess' && msg.data && msg.data.last_move) {
+    // Auto-trigger AI response for chess moves — only for USER moves (not AI moves)
+    // User moves come from onSquareClick, AI moves come from make_move tool handler
+    if (appId === 'chess' && msg.data && msg.data.last_move && !suppressAutoRespond) {
       autoRespondToMove(msg.data)
     }
   })
@@ -108,6 +112,10 @@ export function getAppToolSet(): ToolSet {
         description: `[${app.name}] ${appTool.description}`,
         inputSchema: zodSchema,
         execute: async (params: Record<string, unknown>) => {
+          // Suppress auto-respond while AI is executing tools (prevents loops)
+          suppressAutoRespond = true
+
+          try {
           // Ensure the app panel is open
           const state = uiStore.getState()
           if (state.activeAppId !== app.id) {
@@ -134,7 +142,13 @@ export function getAppToolSet(): ToolSet {
           })
 
           bridge.sendToolCall(callId, appTool.name, params)
-          return resultPromise
+          const result = await resultPromise
+          return result
+          } finally {
+            // Re-enable auto-respond after a short delay
+            // (allows the board to settle before listening for user moves)
+            setTimeout(() => { suppressAutoRespond = false }, 500)
+          }
         },
       })
     }
