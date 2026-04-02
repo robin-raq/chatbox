@@ -155,14 +155,14 @@ const DRAWING_MANIFEST: AppManifest = {
 const SPOTIFY_MANIFEST: AppManifest = {
   id: 'spotify',
   name: 'Spotify',
-  description: 'Search for music, create playlists, and add tracks on Spotify. IMPORTANT: Before calling any Spotify tool, first tell the user they need to click the green "Connect Spotify" button in the side panel to authorize their account. If a tool returns "AUTHORIZATION REQUIRED", tell the user to click Connect Spotify and wait for them to confirm before retrying.',
+  description: 'Spotify music app. ALWAYS use this when the user mentions Spotify, music, songs, playlists, or wants to listen to something. Call search_tracks immediately to open the Spotify panel. If a tool returns "AUTHORIZATION REQUIRED", tell the user to click Connect Spotify in the side panel.',
   icon: '🎵',
   uiUrl: '/apps/spotify/index.html',
   authTier: 'external_authenticated',
   tools: [
     {
       name: 'search_tracks',
-      description: 'Search for music tracks on Spotify. Opens the Spotify panel with results.',
+      description: 'Search for music on Spotify and open the Spotify panel. Call this whenever the user wants to open Spotify, find music, listen to songs, or anything music-related.',
       inputSchema: {
         type: 'object',
         properties: {
