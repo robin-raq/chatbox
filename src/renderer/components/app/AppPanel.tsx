@@ -31,14 +31,12 @@ export default function AppPanel() {
     }
   }, [activeAppId])
 
-  // Determine sandbox level based on app's auth tier
-  const activeApp = activeAppId ? appRegistry.getApp(activeAppId) : null
-  const needsExternalAccess = activeApp?.authTier === 'external_authenticated'
-  // Internal apps: strict sandbox (scripts only)
-  // External authenticated apps: relaxed sandbox (needs SDK loading, popups for OAuth)
-  const sandboxAttrs = needsExternalAccess
-    ? 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox'
-    : 'allow-scripts allow-popups allow-popups-to-escape-sandbox'
+  // All bundled apps get allow-same-origin because they need to load
+  // external scripts (chess.js CDN, stockfish.js worker, Spotify SDK).
+  // This is safe because all apps are served from our own domain.
+  // In production with untrusted third-party apps, internal apps would
+  // use stricter sandboxing without allow-same-origin.
+  const sandboxAttrs = 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox'
 
   if (!showAppPanel || !appPanelUrl) return null
 
