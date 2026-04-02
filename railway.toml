@@ -1,17 +1,6 @@
 [build]
 builder = "nixpacks"
 
-[build.nixpacksPlan.phases.setup]
-nixPkgs = ["nodejs_22", "pnpm"]
-
-[build.nixpacksPlan.phases.install]
-cmds = ["pnpm install --frozen-lockfile"]
-
-[build.nixpacksPlan.phases.build]
-cmds = ["CHATBOX_BUILD_PLATFORM=web npx electron-vite build || true"]
-
 [deploy]
 startCommand = "node server.js"
-
-[deploy.healthcheck]
-path = "/"
+healthcheckPath = "/"
