@@ -51,7 +51,7 @@
     // ─── Stockfish Engine ───────────────────────────────────
     function initEngine() {
       try {
-        stockfish = new Worker('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
+        stockfish = new Worker('/apps/chess/stockfish.js');
         stockfish.onmessage = function(event) {
           var line = event.data;
           if (typeof line === 'string' && line.indexOf('bestmove') === 0) {
