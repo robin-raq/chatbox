@@ -9,6 +9,7 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; padding: 16px; }
     .status { text-align: center; padding: 8px; font-size: 14px; color: #334155; margin-bottom: 12px; font-weight: 500; }
+    .status.thinking { color: #3b82f6; }
     .board { display: grid; grid-template-columns: repeat(8, 1fr); width: 100%; max-width: 380px; margin: 0 auto; border: 2px solid #1a1f36; border-radius: 4px; overflow: hidden; }
     .square { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 32px; cursor: pointer; user-select: none; transition: background 0.1s; }
     .square.light { background: #f0d9b5; }
@@ -16,6 +17,7 @@
     .square.selected { background: #ffff00 !important; }
     .square.legal { position: relative; }
     .square.legal::after { content: ''; position: absolute; width: 30%; height: 30%; background: rgba(0,0,0,0.2); border-radius: 50%; }
+    .square.last-move { background: rgba(155, 199, 0, 0.4) !important; }
     .square:hover { opacity: 0.85; }
     .info { text-align: center; margin-top: 12px; font-size: 12px; color: #64748b; }
     .game-over { text-align: center; padding: 12px; font-size: 16px; font-weight: 600; color: #1a1f36; background: #e0e7ff; border-radius: 6px; margin-bottom: 12px; }
@@ -38,13 +40,71 @@
     var selectedSquare = null;
     var legalMoves = [];
     var playerColor = 'w';
+    var lastMoveFrom = null;
+    var lastMoveTo = null;
+    var engineThinking = false;
+    var stockfish = null;
 
     var PIECES = { p: '\u265F', r: '\u265C', n: '\u265E', b: '\u265D', q: '\u265B', k: '\u265A',
                    P: '\u2659', R: '\u2656', N: '\u2658', B: '\u2657', Q: '\u2655', K: '\u2654' };
 
+    // ─── Stockfish Engine ───────────────────────────────────
+    function initEngine() {
+      try {
+        stockfish = new Worker('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
+        stockfish.onmessage = function(event) {
+          var line = event.data;
+          if (typeof line === 'string' && line.indexOf('bestmove') === 0) {
+            var parts = line.split(' ');
+            var bestMove = parts[1];
+            if (bestMove && bestMove !== '(none)') {
+              applyEngineMove(bestMove);
+            }
+          }
+        };
+        stockfish.postMessage('uci');
+        stockfish.postMessage('setoption name Skill Level value 5');
+        stockfish.postMessage('isready');
+        console.log('[Chess] Stockfish engine initialized');
+      } catch (e) {
+        console.error('[Chess] Failed to init Stockfish:', e.message);
+        stockfish = null;
+      }
+    }
+
+    function askEngineToMove() {
+      if (!stockfish || !game || game.game_over()) return;
+      engineThinking = true;
+      document.getElementById('status').textContent = 'Engine thinking...';
+      document.getElementById('status').className = 'status thinking';
+      stockfish.postMessage('position fen ' + game.fen());
+      stockfish.postMessage('go depth 10');
+    }
+
+    function applyEngineMove(uciMove) {
+      engineThinking = false;
+      if (!game) return;
+      var from = uciMove.substring(0, 2);
+      var to = uciMove.substring(2, 4);
+      var promotion = uciMove.length > 4 ? uciMove[4] : undefined;
+      var move = game.move({ from: from, to: to, promotion: promotion || 'q' });
+      if (move) {
+        lastMoveFrom = from;
+        lastMoveTo = to;
+        selectedSquare = null;
+        legalMoves = [];
+        renderBoard();
+        sendMoveUpdate(move);
+        checkGameOver();
+      } else {
+        console.error('[Chess] Engine returned invalid move:', uciMove);
+        updateStatus();
+      }
+    }
+
+    // ─── Board Rendering ────────────────────────────────────
     function renderBoard() {
       var board = document.getElementById('board');
-      // Clear board safely using DOM methods
       while (board.firstChild) { board.removeChild(board.firstChild); }
       for (var row = 0; row < 8; row++) {
         for (var col = 0; col < 8; col++) {
@@ -54,6 +114,7 @@
           div.className = 'square ' + ((row + col) % 2 === 0 ? 'light' : 'dark');
           if (selectedSquare === sq) div.className += ' selected';
           if (legalMoves.indexOf(sq) >= 0) div.className += ' legal';
+          if (sq === lastMoveFrom || sq === lastMoveTo) div.className += ' last-move';
           div.textContent = piece ? PIECES[piece.color === 'w' ? piece.type.toUpperCase() : piece.type] : '';
           div.dataset.square = sq;
           div.addEventListener('click', onSquareClick);
@@ -71,8 +132,8 @@
         else if (game.in_stalemate()) status.textContent = 'Draw by stalemate';
         else if (game.in_draw()) status.textContent = 'Draw';
         status.className = 'game-over';
-      } else {
-        status.textContent = (game.turn() === 'w' ? 'White' : 'Black') + ' to move';
+      } else if (!engineThinking) {
+        status.textContent = (game.turn() === 'w' ? 'Your' : 'Engine\'s') + ' turn';
         if (game.in_check()) status.textContent += ' (check!)';
         status.className = 'status';
       }
@@ -80,21 +141,30 @@
       info.textContent = history.length > 0 ? 'Moves: ' + history.join(', ') : '';
     }
 
+    // ─── User Interaction ───────────────────────────────────
     function onSquareClick(e) {
+      if (engineThinking) return;
+      if (game.turn() !== playerColor) return;
+
       var sq = e.currentTarget.dataset.square;
       if (selectedSquare) {
         var move = game.move({ from: selectedSquare, to: sq, promotion: 'q' });
         if (move) {
+          lastMoveFrom = selectedSquare;
+          lastMoveTo = sq;
           selectedSquare = null;
           legalMoves = [];
           renderBoard();
           sendMoveUpdate(move);
           checkGameOver();
+          if (!game.game_over()) {
+            askEngineToMove();
+          }
           return;
         }
       }
       var piece = game.get(sq);
-      if (piece && piece.color === game.turn()) {
+      if (piece && piece.color === playerColor) {
         selectedSquare = sq;
         var moves = game.moves({ square: sq, verbose: true });
         legalMoves = moves.map(function(m) { return m.to; });
@@ -129,81 +199,76 @@
 
     function requestNewGame() {
       game = new Chess();
+      playerColor = 'w';
       selectedSquare = null;
       legalMoves = [];
+      lastMoveFrom = null;
+      lastMoveTo = null;
+      engineThinking = false;
       renderBoard();
       ChatBridge.sendContextUpdate({ fen: game.fen(), turn: 'white', move_number: 0, event: 'new_game' });
     }
 
-    // Register tool handlers
+    // ─── Tool Handlers ──────────────────────────────────────
     ChatBridge.onToolCall('start_game', function(params) {
       game = new Chess();
       playerColor = (params.color === 'black') ? 'b' : 'w';
       selectedSquare = null;
       legalMoves = [];
+      lastMoveFrom = null;
+      lastMoveTo = null;
       renderBoard();
-      return 'Chess game started. The user is playing as ' + (playerColor === 'w' ? 'white' : 'black') + '. An interactive board is visible in the side panel where they can click pieces to move. White moves first.';
+      initEngine();
+      if (playerColor === 'b') {
+        askEngineToMove();
+      }
+      return 'Chess game started against the Stockfish engine. The user is playing as ' + (playerColor === 'w' ? 'white' : 'black') + '. The board is visible in the side panel. The user clicks pieces to move. The engine will respond automatically after each move.';
     });
 
     ChatBridge.onToolCall('make_move', function(params) {
       if (!game) return 'No game in progress. Call start_game first.';
-      console.log('[Chess] make_move called with params:', JSON.stringify(params));
       var move = null;
-
-      // Try from/to format first
       if (params.from && params.to) {
         move = game.move({ from: params.from, to: params.to, promotion: params.promotion || 'q' });
       }
-
-      // Try SAN notation (e.g., "e4", "Nf3", "O-O")
-      if (!move && params.move) {
-        move = game.move(params.move);
-      }
-      if (!move && params.san) {
-        move = game.move(params.san);
-      }
-
-      // Try the "from" field as SAN (AI sometimes puts SAN in "from")
-      if (!move && params.from && !params.to) {
-        move = game.move(params.from);
-      }
-
+      if (!move && params.move) move = game.move(params.move);
+      if (!move && params.san) move = game.move(params.san);
+      if (!move && params.from && !params.to) move = game.move(params.from);
       if (!move) {
-        var attempted = params.move || params.san || (params.from + (params.to ? '-' + params.to : ''));
-        console.log('[Chess] Invalid move:', attempted, 'Legal moves:', game.moves().join(', '));
-        return 'Invalid move: ' + attempted + '. Legal moves are: ' + game.moves().slice(0, 10).join(', ');
+        return 'Invalid move. Legal moves: ' + game.moves().slice(0, 10).join(', ');
       }
-
-      console.log('[Chess] Move made:', move.san);
+      lastMoveFrom = move.from;
+      lastMoveTo = move.to;
       selectedSquare = null;
       legalMoves = [];
       renderBoard();
       checkGameOver();
-      var turnText = game.turn() === 'w' ? 'White' : 'Black';
-      return 'Moved ' + move.san + '. ' + turnText + ' to move.' + (game.in_check() ? ' Check!' : '') + (game.game_over() ? ' Game over!' : '');
+      if (!game.game_over()) askEngineToMove();
+      return 'Moved ' + move.san + '. ' + (game.turn() === 'w' ? 'White' : 'Black') + ' to move.';
     });
 
     ChatBridge.onToolCall('get_board_state', function() {
-      if (!game) return { error: 'No game in progress' };
+      if (!game) return 'No game in progress.';
       var h = game.history();
-      var turn = game.turn() === 'w' ? 'White' : 'Black';
+      var turn = game.turn() === 'w' ? 'White (user)' : 'Black (engine)';
       var status = turn + ' to move.';
       if (game.in_check()) status = turn + ' is in check!';
       if (game.game_over()) {
         if (game.in_checkmate()) status = (game.turn() === 'w' ? 'Black' : 'White') + ' wins by checkmate!';
         else status = 'Game ended in a draw.';
       }
-      return status + ' Moves played: ' + h.length + '. Last moves: ' + h.slice(-6).join(', ') + '. Position (FEN): ' + game.fen();
+      return status + ' Moves played: ' + h.length + '. Last moves: ' + h.slice(-6).join(', ') + '. FEN: ' + game.fen();
     });
 
     ChatBridge.onToolCall('get_legal_moves', function() {
-      if (!game) return { error: 'No game in progress' };
-      return { moves: game.moves(), fen: game.fen() };
+      if (!game) return 'No game in progress.';
+      return 'Legal moves: ' + game.moves().join(', ');
     });
 
-    // Initialize with a default board
+    // ─── Init ───────────────────────────────────────────────
     game = new Chess();
     renderBoard();
+    initEngine();
   </script>
 </body>
 </html>

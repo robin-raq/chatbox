@@ -8,7 +8,7 @@ import type { AppManifest } from './types'
 const CHESS_MANIFEST: AppManifest = {
   id: 'chess',
   name: 'Chess',
-  description: 'Play chess against the user. A visual board appears in the side panel — NEVER render the board as text. IMPORTANT: Before EVERY move you make, you MUST call get_board_state first to see the current position, then call get_legal_moves, then call make_move with a legal move. The user moves by clicking pieces on the board. When the user tells you they moved or says "your turn", always call get_board_state first. Play at a casual level.',
+  description: 'Interactive chess game with a built-in Stockfish engine. The user plays against the engine — the engine responds automatically after each user move. You do NOT need to make moves. Your role is to start the game and act as a chess coach: analyze positions, give advice when asked, and comment on the game. Use get_board_state to see the current position when the user asks for help.',
   icon: '♟',
   uiUrl: '/apps/chess/index.html',
   authTier: 'internal',
@@ -29,7 +29,7 @@ const CHESS_MANIFEST: AppManifest = {
     },
     {
       name: 'make_move',
-      description: 'Make a chess move on the board. Use standard algebraic notation (SAN) like "e4", "Nf3", "O-O", "Bxe5". The move parameter is preferred over from/to.',
+      description: 'Execute a chess move on the board. You MUST call this tool to make any move — never just describe a move in text. Use SAN notation like "e4", "Nf3", "O-O", "Bxe5".',
       inputSchema: {
         type: 'object',
         properties: {

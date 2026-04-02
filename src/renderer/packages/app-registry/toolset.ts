@@ -17,8 +17,8 @@ import type { AppManifest, AppToolDefinition } from './types'
 /** Active bridges keyed by app ID */
 const activeBridges = new Map<string, AppBridge>()
 
-/** Suppress auto-respond during AI tool execution to prevent loops */
-let suppressAutoRespond = false
+/** Track whether the AI is currently generating (executing tools) */
+let aiIsGenerating = false
 
 /** Pending tool call resolvers keyed by call ID */
 const pendingCalls = new Map<string, { resolve: (result: unknown) => void; reject: (err: Error) => void }>()
@@ -43,11 +43,6 @@ export function connectBridge(appId: string, iframe: HTMLIFrameElement): void {
 
   bridge.onContextUpdate((msg) => {
     console.debug(`[ChatBridge] context_update from ${appId}:`, msg.data)
-    // Auto-trigger AI response for chess moves — only for USER moves (not AI moves)
-    // User moves come from onSquareClick, AI moves come from make_move tool handler
-    if (appId === 'chess' && msg.data && msg.data.last_move && !suppressAutoRespond) {
-      autoRespondToMove(msg.data)
-    }
   })
 
   bridge.onCompletion((msg) => {
@@ -112,8 +107,8 @@ export function getAppToolSet(): ToolSet {
         description: `[${app.name}] ${appTool.description}`,
         inputSchema: zodSchema,
         execute: async (params: Record<string, unknown>) => {
-          // Suppress auto-respond while AI is executing tools (prevents loops)
-          suppressAutoRespond = true
+          // Mark AI as generating to prevent auto-respond loops
+          aiIsGenerating = true
 
           try {
           // Ensure the app panel is open
@@ -145,9 +140,13 @@ export function getAppToolSet(): ToolSet {
           const result = await resultPromise
           return result
           } finally {
-            // Re-enable auto-respond after a short delay
-            // (allows the board to settle before listening for user moves)
-            setTimeout(() => { suppressAutoRespond = false }, 500)
+            // Re-enable auto-respond after a delay
+            // The AI SDK may call multiple tools sequentially (get_board_state → make_move)
+            // We wait 2 seconds after the last tool completes before re-enabling
+            setTimeout(() => {
+              aiIsGenerating = false
+              console.debug('[ChatBridge] aiIsGenerating reset to false')
+            }, 2000)
           }
         },
       })
