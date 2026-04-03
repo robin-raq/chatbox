@@ -136,9 +136,10 @@ pnpm test
 
 | Document | Description |
 |----------|-------------|
-| [Pre-Search Document](./PRESEARCH.md) | Case study analysis, planning checklist, architecture diagrams, cost analysis |
+| [Pre-Search Document](./PRESEARCH.md) | Case study analysis, planning checklist, architecture diagrams |
 | [Pre-Search PDF](./PRESEARCH.pdf) | PDF version of the pre-search document |
 | [API Documentation](./docs/API.md) | Developer guide for building third-party apps |
+| [AI Cost Analysis](./docs/COST_ANALYSIS.md) | Dev spend, token breakdown, projections for 100-100K users |
 
 ## Deployed Application
 
