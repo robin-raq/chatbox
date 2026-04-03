@@ -140,9 +140,6 @@ pnpm test
 | [Pre-Search PDF](./PRESEARCH.pdf) | PDF version of the pre-search document |
 | [API Documentation](./chatbox/docs/API.md) | Developer guide for building third-party apps |
 | [Study Guide](./STUDY_GUIDE.md) | Interview-prep reference for all key decisions |
-| [Architecture Talk](./ARCHITECTURE_TALK.md) | 5-minute architecture presentation script |
-| [Talk Cheatsheet](./TALK_CHEATSHEET.md) | One-page reference for the presentation |
-| [Demo Video Script](./DEMO_VIDEO_SCRIPT.md) | Script for the 3-5 minute demo recording |
 | [Build Log](./BUILDOUT.md) | Session-by-session development log |
 | [Architecture Slides](./ChatBridge_Architecture.pptx) | 8-slide PowerPoint deck |
 
