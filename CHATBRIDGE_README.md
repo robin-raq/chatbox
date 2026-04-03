@@ -138,10 +138,7 @@ pnpm test
 |----------|-------------|
 | [Pre-Search Document](./PRESEARCH.md) | Case study analysis, planning checklist, architecture diagrams, cost analysis |
 | [Pre-Search PDF](./PRESEARCH.pdf) | PDF version of the pre-search document |
-| [API Documentation](./chatbox/docs/API.md) | Developer guide for building third-party apps |
-| [Study Guide](./STUDY_GUIDE.md) | Interview-prep reference for all key decisions |
-| [Build Log](./BUILDOUT.md) | Session-by-session development log |
-| [Architecture Slides](./ChatBridge_Architecture.pptx) | 8-slide PowerPoint deck |
+| [API Documentation](./docs/API.md) | Developer guide for building third-party apps |
 
 ## Deployed Application
 
