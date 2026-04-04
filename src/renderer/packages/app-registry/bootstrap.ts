@@ -12,6 +12,10 @@ const CHESS_MANIFEST: AppManifest = {
   icon: '♟',
   uiUrl: '/apps/chess/index.html',
   authTier: 'internal',
+  ageRating: 'all-ages',
+  learningOutcome: 'Strategic thinking, pattern recognition, problem solving. Students learn to plan ahead, evaluate positions, and understand cause-and-effect through gameplay.',
+  dataCollected: [],
+  reviewStatus: 'approved',
   tools: [
     {
       name: 'start_game',
@@ -66,6 +70,10 @@ const GROKIPEDIA_MANIFEST: AppManifest = {
   icon: '📚',
   uiUrl: '/apps/grokipedia/index.html',
   authTier: 'external_public',
+  ageRating: 'all-ages',
+  learningOutcome: 'Research skills, reading comprehension, critical thinking. Students learn to find information, evaluate sources, and ask follow-up questions to deepen understanding.',
+  dataCollected: ['search queries'],
+  reviewStatus: 'approved',
   tools: [
     {
       name: 'search_articles',
@@ -110,6 +118,10 @@ const DRAWING_MANIFEST: AppManifest = {
   icon: '🎨',
   uiUrl: '/apps/drawing/index.html',
   authTier: 'internal',
+  ageRating: 'all-ages',
+  learningOutcome: 'Visual learning, spatial reasoning, concept mapping. Students create diagrams, flowcharts, and sketches to organize and communicate ideas visually.',
+  dataCollected: [],
+  reviewStatus: 'approved',
   tools: [
     {
       name: 'open_whiteboard',
@@ -145,6 +157,11 @@ const SPOTIFY_MANIFEST: AppManifest = {
   icon: '🎵',
   uiUrl: '/apps/spotify/index.html',
   authTier: 'external_authenticated',
+  ageRating: '13+',
+  learningOutcome: 'Focus and productivity through curated study music. Demonstrates OAuth2 integration pattern for authenticated third-party services.',
+  dataCollected: ['Spotify user ID', 'search queries', 'playlist data'],
+  privacyPolicyUrl: 'https://www.spotify.com/legal/privacy-policy/',
+  reviewStatus: 'approved',
   tools: [
     {
       name: 'search_tracks',
