@@ -75,6 +75,12 @@ export interface AppToolDefinition {
 /** Auth tier determines how credentials are managed. */
 export type AuthTier = 'internal' | 'external_public' | 'external_authenticated'
 
+/** Age rating for child-safety compliance */
+export type AgeRating = 'all-ages' | '6+' | '10+' | '13+' | '18+'
+
+/** Review status for app registration */
+export type ReviewStatus = 'pending' | 'approved' | 'rejected'
+
 /**
  * The manifest a developer submits to register their app.
  * This is the contract between the app developer and the platform.
@@ -87,6 +93,13 @@ export interface AppManifest {
   uiUrl: string
   authTier: AuthTier
   tools: AppToolDefinition[]
+
+  // Child-safety & compliance fields (optional for MVP, required for production)
+  ageRating?: AgeRating
+  learningOutcome?: string
+  dataCollected?: string[]
+  privacyPolicyUrl?: string
+  reviewStatus?: ReviewStatus
 }
 
 // ─── Runtime State ───────────────────────────────────────────────────────────
