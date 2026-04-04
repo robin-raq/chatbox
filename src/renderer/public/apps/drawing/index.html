@@ -3,275 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Drawing Canvas - ChatBridge</title>
+  <title>Excalidraw - ChatBridge</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; overflow: hidden; }
-    .toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: white; border-bottom: 1px solid #e2e8f0; }
-    .toolbar button { padding: 4px 10px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; background: white; cursor: pointer; }
-    .toolbar button:hover { background: #f1f5f9; }
-    .toolbar button.active { background: #3b82f6; color: white; border-color: #3b82f6; }
-    .color-btn { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #e2e8f0; cursor: pointer; }
-    .color-btn.active { border-color: #1a1f36; border-width: 3px; }
-    .size-label { font-size: 11px; color: #64748b; }
-    input[type="range"] { width: 60px; }
-    canvas { display: block; cursor: crosshair; background: white; }
-    .status { padding: 4px 12px; font-size: 11px; color: #94a3b8; background: #f8f9fa; border-top: 1px solid #e2e8f0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+    .toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #f8f9fa; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
+    .toolbar-title { font-size: 13px; font-weight: 600; color: #334155; }
+    .toolbar-hint { font-size: 11px; color: #94a3b8; margin-left: auto; }
+    iframe { flex: 1; border: 0; width: 100%; }
   </style>
 </head>
 <body>
   <div class="toolbar">
-    <button id="btn-pen" class="active" onclick="setTool('pen')">Pen</button>
-    <button id="btn-eraser" onclick="setTool('eraser')">Eraser</button>
-    <button id="btn-rect" onclick="setTool('rect')">Rect</button>
-    <button id="btn-circle" onclick="setTool('circle')">Circle</button>
-    <span style="width:1px;height:20px;background:#e2e8f0"></span>
-    <div class="color-btn active" style="background:#1a1f36" onclick="setColor('#1a1f36', this)"></div>
-    <div class="color-btn" style="background:#ef4444" onclick="setColor('#ef4444', this)"></div>
-    <div class="color-btn" style="background:#3b82f6" onclick="setColor('#3b82f6', this)"></div>
-    <div class="color-btn" style="background:#06d6a0" onclick="setColor('#06d6a0', this)"></div>
-    <div class="color-btn" style="background:#f59e0b" onclick="setColor('#f59e0b', this)"></div>
-    <span style="width:1px;height:20px;background:#e2e8f0"></span>
-    <span class="size-label">Size</span>
-    <input type="range" id="brush-size" min="1" max="20" value="3" oninput="brushSize = this.value">
-    <span style="width:1px;height:20px;background:#e2e8f0"></span>
-    <button onclick="clearCanvas()">Clear</button>
-    <button onclick="undo()">Undo</button>
+    <span class="toolbar-title">Excalidraw Whiteboard</span>
+    <span class="toolbar-hint">Draw diagrams, sketch ideas, visualize concepts</span>
   </div>
-  <canvas id="canvas"></canvas>
-  <div class="status" id="status">Ready to draw</div>
+  <iframe id="excalidraw" src="https://excalidraw.com" allow="clipboard-read; clipboard-write"></iframe>
 
   <script src="/apps/sdk/chatbridge-app-sdk.js"></script>
   <script>
-    var canvas = document.getElementById('canvas');
-    var ctx = canvas.getContext('2d');
-    if (!ctx) {
-      document.getElementById('status').textContent = 'Drawing not supported in this browser';
-      document.querySelector('.toolbar').style.display = 'none';
-    }
-    var drawing = false;
-    var currentTool = 'pen';
-    var currentColor = '#1a1f36';
-    var brushSize = 3;
-    var strokes = [];
-    var currentStroke = null;
-    var shapeStart = null;
-    var undoStack = [];
-    var strokeCount = 0;
+    // Tool handlers — Excalidraw runs in a nested iframe so we can't
+    // directly access its state. Tools provide metadata and signals.
 
-    function resizeCanvas() {
-      var toolbar = document.querySelector('.toolbar');
-      var status = document.getElementById('status');
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight - toolbar.offsetHeight - status.offsetHeight;
-      redraw();
-    }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
+    ChatBridge.onToolCall('open_whiteboard', function(params) {
+      return 'Excalidraw whiteboard is now open in the side panel. The student can draw diagrams, sketch ideas, and visualize concepts. Tools include pen, shapes, arrows, text, and more. When done, they can tell you in the chat.';
+    });
 
-    function redraw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      strokes.forEach(function(stroke) {
-        if (stroke.type === 'path') {
-          drawPath(stroke);
-        } else if (stroke.type === 'rect') {
-          drawRect(stroke);
-        } else if (stroke.type === 'circle') {
-          drawCircle(stroke);
-        }
-      });
-    }
-
-    function drawPath(stroke) {
-      if (stroke.points.length < 2) return;
-      ctx.beginPath();
-      ctx.strokeStyle = stroke.color;
-      ctx.lineWidth = stroke.size;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.globalCompositeOperation = stroke.eraser ? 'destination-out' : 'source-over';
-      ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-      for (var i = 1; i < stroke.points.length; i++) {
-        ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-      }
-      ctx.stroke();
-      ctx.globalCompositeOperation = 'source-over';
-    }
-
-    function drawRect(stroke) {
-      ctx.strokeStyle = stroke.color;
-      ctx.lineWidth = stroke.size;
-      ctx.strokeRect(stroke.x, stroke.y, stroke.w, stroke.h);
-    }
-
-    function drawCircle(stroke) {
-      ctx.beginPath();
-      ctx.strokeStyle = stroke.color;
-      ctx.lineWidth = stroke.size;
-      ctx.ellipse(stroke.cx, stroke.cy, Math.abs(stroke.rx), Math.abs(stroke.ry), 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    function getPos(e) {
-      var rect = canvas.getBoundingClientRect();
-      var clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      var clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      return { x: clientX - rect.left, y: clientY - rect.top };
-    }
-
-    canvas.addEventListener('mousedown', startDraw);
-    canvas.addEventListener('mousemove', continueDraw);
-    canvas.addEventListener('mouseup', endDraw);
-    canvas.addEventListener('mouseleave', endDraw);
-    canvas.addEventListener('touchstart', function(e) { e.preventDefault(); startDraw(e); });
-    canvas.addEventListener('touchmove', function(e) { e.preventDefault(); continueDraw(e); });
-    canvas.addEventListener('touchend', function(e) { e.preventDefault(); endDraw(e); });
-
-    function startDraw(e) {
-      drawing = true;
-      var pos = getPos(e);
-      if (currentTool === 'pen' || currentTool === 'eraser') {
-        currentStroke = { type: 'path', points: [pos], color: currentColor, size: parseInt(brushSize), eraser: currentTool === 'eraser' };
-      } else {
-        shapeStart = pos;
-      }
-    }
-
-    function continueDraw(e) {
-      if (!drawing) return;
-      var pos = getPos(e);
-      if (currentTool === 'pen' || currentTool === 'eraser') {
-        currentStroke.points.push(pos);
-        redraw();
-        drawPath(currentStroke);
-      } else {
-        redraw();
-        var x = Math.min(shapeStart.x, pos.x), y = Math.min(shapeStart.y, pos.y);
-        var w = Math.abs(pos.x - shapeStart.x), h = Math.abs(pos.y - shapeStart.y);
-        if (currentTool === 'rect') {
-          ctx.strokeStyle = currentColor;
-          ctx.lineWidth = parseInt(brushSize);
-          ctx.strokeRect(x, y, w, h);
-        } else if (currentTool === 'circle') {
-          ctx.beginPath();
-          ctx.strokeStyle = currentColor;
-          ctx.lineWidth = parseInt(brushSize);
-          ctx.ellipse(x + w/2, y + h/2, w/2, h/2, 0, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-      }
-    }
-
-    function endDraw(e) {
-      if (!drawing) return;
-      drawing = false;
-      if (currentTool === 'pen' || currentTool === 'eraser') {
-        if (currentStroke && currentStroke.points.length > 1) {
-          strokes.push(currentStroke);
-          undoStack.push(strokes.length - 1);
-          strokeCount++;
-        }
-        currentStroke = null;
-      } else if (shapeStart) {
-        var pos = e.changedTouches ? { x: e.changedTouches[0].clientX - canvas.getBoundingClientRect().left, y: e.changedTouches[0].clientY - canvas.getBoundingClientRect().top } : getPos(e);
-        var x = Math.min(shapeStart.x, pos.x), y = Math.min(shapeStart.y, pos.y);
-        var w = Math.abs(pos.x - shapeStart.x), h = Math.abs(pos.y - shapeStart.y);
-        if (w > 5 && h > 5) {
-          if (currentTool === 'rect') {
-            strokes.push({ type: 'rect', x: x, y: y, w: w, h: h, color: currentColor, size: parseInt(brushSize) });
-          } else if (currentTool === 'circle') {
-            strokes.push({ type: 'circle', cx: x + w/2, cy: y + h/2, rx: w/2, ry: h/2, color: currentColor, size: parseInt(brushSize) });
-          }
-          undoStack.push(strokes.length - 1);
-          strokeCount++;
-        }
-        shapeStart = null;
-      }
-      redraw();
-      updateStatus();
-    }
-
-    function setTool(tool) {
-      currentTool = tool;
-      document.querySelectorAll('.toolbar button').forEach(function(b) { b.classList.remove('active'); });
-      var btn = document.getElementById('btn-' + tool);
-      if (btn) btn.classList.add('active');
-    }
-
-    function setColor(color, el) {
-      currentColor = color;
-      document.querySelectorAll('.color-btn').forEach(function(b) { b.classList.remove('active'); });
-      if (el) el.classList.add('active');
-    }
-
-    function clearCanvas() {
-      strokes = [];
-      undoStack = [];
-      strokeCount = 0;
-      redraw();
-      updateStatus();
-    }
-
-    function undo() {
-      if (undoStack.length > 0) {
-        var idx = undoStack.pop();
-        strokes.splice(idx, 1);
-        strokeCount = strokes.length;
-        redraw();
-        updateStatus();
-      }
-    }
-
-    function updateStatus() {
-      document.getElementById('status').textContent = strokes.length + ' element' + (strokes.length !== 1 ? 's' : '') + ' on canvas';
-    }
-
-    function getCanvasDescription() {
-      var shapes = { path: 0, rect: 0, circle: 0 };
-      var colors = {};
-      strokes.forEach(function(s) {
-        shapes[s.type] = (shapes[s.type] || 0) + 1;
-        if (!s.eraser) colors[s.color] = (colors[s.color] || 0) + 1;
-      });
-      return {
-        total_elements: strokes.length,
-        shapes: shapes,
-        colors_used: Object.keys(colors),
-        canvas_size: { width: canvas.width, height: canvas.height },
-      };
-    }
-
-    // Tool handlers
     ChatBridge.onToolCall('get_canvas_state', function() {
-      var desc = getCanvasDescription();
-      return 'Canvas has ' + desc.total_elements + ' elements: ' + desc.shapes.path + ' drawn paths, ' + desc.shapes.rect + ' rectangles, ' + desc.shapes.circle + ' circles. Colors used: ' + desc.colors_used.join(', ') + '.';
+      return 'The Excalidraw whiteboard is active. The student is drawing in the side panel. Ask them to describe what they drew or take a screenshot to share.';
     });
 
     ChatBridge.onToolCall('clear_canvas', function() {
-      clearCanvas();
-      return 'Canvas cleared. The drawing area is now empty.';
-    });
-
-    ChatBridge.onToolCall('export_image', function() {
-      var dataUrl = canvas.toDataURL('image/png');
-      return 'Canvas exported as PNG image. The drawing contains ' + strokes.length + ' elements.';
-    });
-
-    ChatBridge.onToolCall('add_text', function(params) {
-      var text = params.text || 'Hello';
-      var x = params.x || canvas.width / 2;
-      var y = params.y || canvas.height / 2;
-      var fontSize = params.font_size || 24;
-      ctx.font = fontSize + 'px sans-serif';
-      ctx.fillStyle = currentColor;
-      ctx.textAlign = 'center';
-      ctx.fillText(text, x, y);
-      strokes.push({ type: 'path', points: [{x: x, y: y}, {x: x+1, y: y}], color: currentColor, size: 1, eraser: false });
-      strokeCount++;
-      updateStatus();
-      return 'Added text "' + text + '" to the canvas.';
+      // Reload the Excalidraw iframe to clear
+      document.getElementById('excalidraw').src = 'https://excalidraw.com';
+      return 'Whiteboard cleared. A fresh canvas is ready.';
     });
   </script>
 </body>

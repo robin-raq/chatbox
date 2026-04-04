@@ -105,15 +105,23 @@ const GROKIPEDIA_MANIFEST: AppManifest = {
 
 const DRAWING_MANIFEST: AppManifest = {
   id: 'drawing',
-  name: 'Drawing Canvas',
-  description: 'Open an interactive drawing canvas. ALWAYS use this tool immediately when the user mentions drawing, sketching, doodling, diagramming, or wants to create anything visual. Do not ask what they want to draw — just open the canvas and let them draw freely.',
+  name: 'Excalidraw Whiteboard',
+  description: 'Open the Excalidraw whiteboard for drawing, diagramming, and visual thinking. ALWAYS use this when the user mentions drawing, sketching, diagramming, whiteboard, or wants to visualize anything. Do not ask what they want to draw — just open it.',
   icon: '🎨',
   uiUrl: '/apps/drawing/index.html',
   authTier: 'internal',
   tools: [
     {
+      name: 'open_whiteboard',
+      description: 'Open the Excalidraw whiteboard. Call this whenever the user wants to draw, sketch, diagram, or visualize anything.',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    },
+    {
       name: 'get_canvas_state',
-      description: 'Open the drawing canvas and get a description of what is on it. Call this when the user wants to draw or sketch anything.',
+      description: 'Check if the whiteboard is active.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -121,29 +129,7 @@ const DRAWING_MANIFEST: AppManifest = {
     },
     {
       name: 'clear_canvas',
-      description: 'Clear the drawing canvas completely.',
-      inputSchema: {
-        type: 'object',
-        properties: {},
-      },
-    },
-    {
-      name: 'add_text',
-      description: 'Add a text label to the canvas.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          text: { type: 'string', description: 'The text to add' },
-          x: { type: 'number', description: 'X position (optional, defaults to center)' },
-          y: { type: 'number', description: 'Y position (optional, defaults to center)' },
-          font_size: { type: 'number', description: 'Font size in pixels (optional, defaults to 24)' },
-        },
-        required: ['text'],
-      },
-    },
-    {
-      name: 'export_image',
-      description: 'Export the current canvas as a PNG image.',
+      description: 'Clear the whiteboard and start fresh.',
       inputSchema: {
         type: 'object',
         properties: {},
