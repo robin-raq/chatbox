@@ -147,6 +147,33 @@ pnpm test
 
 **Note for Spotify:** The Spotify integration requires users to be added to the app's Developer Mode allowlist (Spotify policy). Contact the developer to be added.
 
+## Known Limitations & Future Work
+
+### Scalability
+
+The current architecture handles 1-10 concurrent users (demo scope). At classroom scale (1,000+ students), the bottleneck is **tool call blocking** — each tool invocation holds an SSE connection open while awaiting the iframe's postMessage response (30-second timeout).
+
+**Planned mitigations:**
+- **Queue-based tool execution** — Decouple LLM streaming from tool execution using Redis/BullMQ
+- **Tool result caching** — If 50 students look up "photosynthesis," cache the first result (TTL 5 min)
+- **Horizontal scaling** — Railway supports multi-instance deployments behind a load balancer
+- **Selective tool injection** — Only inject schemas for contextually relevant apps per conversation (reduces ~60% of token costs at scale)
+
+### Security
+
+- Spotify tokens are stored server-side in httpOnly cookies (not localStorage)
+- Sandboxed iframes isolate app code from the parent page
+- App registration is currently code-side only — a production system would add a review UI with pending/approved/rejected states and child-safety criteria
+- Rate limiting exists at the postMessage level (20 msg/sec) but should be extended to API proxy routes
+
+### Educational Value
+
+Each app was chosen to demonstrate a different integration pattern, but educational relevance varies:
+- **Chess** (high) — Strategic thinking, problem solving, beginner-friendly notation guide
+- **Grokipedia** (high) — Research skills, AI-generated articles at the student's reading level
+- **Excalidraw** (high) — Visual learning, diagramming, concept mapping
+- **Spotify** (low-medium) — Study music has marginal educational value; architecturally demonstrates OAuth2 tier. A better fit would be Google Classroom or a quiz/flashcard app.
+
 ## Project Structure (Key Files)
 
 ```
