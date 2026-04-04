@@ -80,65 +80,33 @@
   <script src="https://sdk.scdn.co/spotify-player.js"></script>
   <script src="/apps/sdk/chatbridge-app-sdk.js"></script>
   <script>
-    var accessToken = null;
-    var refreshToken = null;
-    var tokenExpiresAt = 0;
+    var isConnected = false;
     var spotifyPlayer = null;
     var playerDeviceId = null;
     var playerReady = false;
     var currentPlaylist = null;
     var currentPlaylistId = null;
     var playlistTracks = [];
-    var refreshPromise = null;
 
-    // Persist tokens to localStorage so they survive iframe reloads
-    function saveTokens() {
-      try {
-        localStorage.setItem('spotify_tokens', JSON.stringify({
-          accessToken: accessToken,
-          refreshToken: refreshToken,
-          tokenExpiresAt: tokenExpiresAt,
-        }));
-      } catch(e) {}
-    }
-
-    function loadTokens() {
-      try {
-        var saved = JSON.parse(localStorage.getItem('spotify_tokens') || 'null');
-        if (saved && saved.accessToken) {
-          accessToken = saved.accessToken;
-          refreshToken = saved.refreshToken;
-          tokenExpiresAt = saved.tokenExpiresAt || 0;
-          return true;
-        }
-      } catch(e) {}
-      return false;
-    }
+    // Tokens are stored server-side in httpOnly cookies.
+    // The iframe never sees or stores the actual tokens.
+    // Only the Playback SDK needs a token, fetched via /api/spotify/token.
 
     function connectSpotify() {
-      // If we have saved tokens, try to reuse them
-      if (loadTokens() && Date.now() < tokenExpiresAt - 60000) {
-        showConnected();
-        initPlayer();
-        ChatBridge.sendContextUpdate({ event: 'connected' });
-        return;
-      }
-      // If we have a refresh token, try refreshing first
-      if (refreshToken) {
-        ensureToken().then(function() {
-          if (accessToken) {
+      // Check if already connected via server-side session
+      fetch('/api/spotify/status', { credentials: 'include' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.connected) {
+            isConnected = true;
             showConnected();
             initPlayer();
             ChatBridge.sendContextUpdate({ event: 'connected' });
           } else {
             openOAuthPopup();
           }
-        }).catch(function() {
-          openOAuthPopup();
-        });
-        return;
-      }
-      openOAuthPopup();
+        })
+        .catch(function() { openOAuthPopup(); });
     }
 
     function openOAuthPopup() {
@@ -151,10 +119,8 @@
             showAuthError('Connection failed: ' + data.error);
             return;
           }
-          accessToken = data.access_token;
-          refreshToken = data.refresh_token;
-          tokenExpiresAt = Date.now() + (data.expires_in * 1000);
-          saveTokens();
+          // Token is stored server-side via httpOnly cookie (set by /callback)
+          isConnected = true;
           showConnected();
           initPlayer();
           ChatBridge.sendContextUpdate({ event: 'connected' });
@@ -163,10 +129,16 @@
     }
 
     function initPlayer() {
-      if (!accessToken || spotifyPlayer) return;
+      if (!isConnected || spotifyPlayer) return;
       spotifyPlayer = new Spotify.Player({
         name: 'ChatBridge Player',
-        getOAuthToken: function(cb) { cb(accessToken); },
+        getOAuthToken: function(cb) {
+          // Fetch token from server (only route that exposes it — for SDK only)
+          fetch('/api/spotify/token', { credentials: 'include' })
+            .then(function(r) { return r.json(); })
+            .then(function(d) { if (d.access_token) cb(d.access_token); })
+            .catch(function() { console.error('[Spotify] Failed to get token for SDK'); });
+        },
         volume: 0.5,
       });
       spotifyPlayer.addListener('ready', function(data) {
@@ -195,7 +167,7 @@
     // SDK ready callback — called by the Spotify SDK script
     window.onSpotifyWebPlaybackSDKReady = function() {
       console.log('[Spotify] SDK loaded');
-      if (accessToken) initPlayer();
+      if (isConnected) initPlayer();
     };
 
     function showConnected() {
@@ -208,6 +180,32 @@
       text.className = 'connected-text';
       text.textContent = 'Connected to Spotify';
       authSection.appendChild(text);
+      // Disconnect button
+      var discBtn = document.createElement('button');
+      discBtn.textContent = 'Disconnect';
+      discBtn.style.cssText = 'margin-left:auto;padding:4px 10px;font-size:11px;border:1px solid #444;border-radius:4px;background:transparent;color:#b3b3b3;cursor:pointer;';
+      discBtn.onclick = function() {
+        isConnected = false;
+        // Clear server-side session via httpOnly cookie
+        fetch('/api/spotify/disconnect', { method: 'POST', credentials: 'include' });
+        if (spotifyPlayer) { spotifyPlayer.disconnect(); spotifyPlayer = null; }
+        playerDeviceId = null;
+        playerReady = false;
+        updateNowPlaying('', '', false);
+        // Reset to connect state
+        while (authSection.firstChild) authSection.removeChild(authSection.firstChild);
+        var p = document.createElement('p');
+        p.textContent = 'Connect your Spotify account to create playlists and search for music';
+        p.style.cssText = 'font-size:13px;color:#b3b3b3;margin-bottom:10px;';
+        authSection.appendChild(p);
+        var btn = document.createElement('button');
+        btn.className = 'auth-btn';
+        btn.textContent = 'Connect Spotify';
+        btn.onclick = connectSpotify;
+        authSection.appendChild(btn);
+        authSection.className = 'auth-banner';
+      };
+      authSection.appendChild(discBtn);
       authSection.className = 'connected';
     }
 
@@ -226,31 +224,8 @@
       authSection.appendChild(btn);
     }
 
-    function ensureToken() {
-      if (!accessToken) return Promise.reject(new Error('Not connected'));
-      if (Date.now() < tokenExpiresAt - 60000) return Promise.resolve();
-      // Token expired or expiring soon — refresh
-      if (refreshPromise) return refreshPromise;
-      refreshPromise = fetch('/api/spotify/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      })
-      .then(function(res) { return res.json(); })
-      .then(function(data) {
-        if (data.access_token) {
-          accessToken = data.access_token;
-          tokenExpiresAt = Date.now() + (data.expires_in * 1000);
-          saveTokens();
-        }
-        refreshPromise = null;
-      })
-      .catch(function(err) {
-        refreshPromise = null;
-        throw err;
-      });
-      return refreshPromise;
-    }
+    // Token refresh is handled server-side automatically via the requireAuth middleware.
+    // No client-side ensureToken needed.
 
     function msToTime(ms) {
       var min = Math.floor(ms / 60000);
@@ -283,18 +258,16 @@
     }
 
     function playTrack(uri, name, artist) {
-      if (!accessToken) return;
-      ensureToken().then(function() {
-        var body = { uris: [uri] };
-        var url = '/api/spotify/play';
-        if (playerDeviceId) {
-          url += '?device_id=' + playerDeviceId;
-        }
-        return fetch(url, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-          body: JSON.stringify(body),
-        });
+      if (!isConnected) return;
+      var body = { uris: [uri] };
+      var url = '/api/spotify/play';
+      if (playerDeviceId) {
+        url += '?device_id=' + playerDeviceId;
+      }
+      fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify(body),
       }).then(function(res) {
         if (res && res.ok) {
           updateNowPlaying(name || 'Playing', artist || '', true);
@@ -393,18 +366,16 @@
 
     // Tool handlers — real Spotify API via backend proxy
     ChatBridge.onToolCall('search_tracks', function(params) {
-      if (!accessToken) {
+      if (!isConnected) {
         // Auto-trigger the connect flow
         connectSpotify();
         return 'The Spotify authorization popup has opened. Tell the user to log in to Spotify in the popup window and authorize the app. Once they see "Connected" in the side panel, ask them to say "ready" and then retry this tool call.';
       }
       var query = params.query || '';
-      return ensureToken().then(function() {
-        return fetch('/api/spotify/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-          body: JSON.stringify({ query: query, type: 'track', limit: 10 }),
-        });
+      return fetch('/api/spotify/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ query: query, type: 'track', limit: 10 }),
       })
       .then(function(res) { return res.json(); })
       .then(function(data) {
@@ -427,27 +398,25 @@
     });
 
     ChatBridge.onToolCall('create_playlist', function(params) {
-      console.log('[Spotify] create_playlist called, accessToken:', accessToken ? 'SET (' + accessToken.substring(0,10) + '...)' : 'NULL');
-      if (!accessToken) {
+      if (!isConnected) {
         connectSpotify();
         return 'The Spotify authorization popup has opened. Tell the user to log in to Spotify in the popup window and authorize the app. Once they see "Connected" in the side panel, ask them to say "ready" and then retry this tool call.';
       }
       var name = params.name || 'My Playlist';
-      console.log('[Spotify] Creating playlist:', name, 'with token:', accessToken.substring(0,10) + '...');
-      return ensureToken().then(function() {
-        return fetch('/api/spotify/playlists', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-          body: JSON.stringify({ name: name, description: 'Created by ChatBridge' }),
-        });
+      return fetch('/api/spotify/playlists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ name: name, description: 'Created by ChatBridge' }),
       })
-      .then(function(res) {
-        console.log('[Spotify] Playlist API response status:', res.status);
-        return res.json();
+      .then(function(res) { return res.json();
       })
       .then(function(playlist) {
         console.log('[Spotify] Create playlist response:', JSON.stringify(playlist));
-        if (playlist.error) return 'Failed to create playlist: ' + JSON.stringify(playlist.error);
+        if (playlist.error) {
+          var status = playlist.error.status || '';
+          if (status === 403) return 'Spotify returned "Forbidden" (403). The app owner needs to add your Spotify account to the app allowlist in the Spotify Developer Dashboard under Settings > User Management. Search and playback still work.';
+          return 'Failed to create playlist: ' + (playlist.error.message || JSON.stringify(playlist.error));
+        }
         currentPlaylist = playlist.name;
         currentPlaylistId = playlist.id;
         playlistTracks = [];
@@ -460,7 +429,7 @@
     });
 
     ChatBridge.onToolCall('add_to_playlist', function(params) {
-      if (!accessToken) {
+      if (!isConnected) {
         return 'User needs to connect their Spotify account first.';
       }
       if (!currentPlaylistId) {
@@ -478,12 +447,10 @@
 
       if (!match) {
         // Search for the track first
-        return ensureToken().then(function() {
-          return fetch('/api/spotify/search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-            body: JSON.stringify({ query: trackName + ' ' + artist, type: 'track', limit: 1 }),
-          });
+        return fetch('/api/spotify/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+          body: JSON.stringify({ query: trackName + ' ' + artist, type: 'track', limit: 1 }),
         })
         .then(function(res) { return res.json(); })
         .then(function(data) {
@@ -493,26 +460,25 @@
         });
       }
 
-      return ensureToken().then(function() { return addTrackToPlaylist(match); });
+      return addTrackToPlaylist(match);
     });
 
-    // Auto-connect on iframe load if tokens are saved
-    if (loadTokens()) {
-      console.log('[Spotify] Found saved tokens, auto-connecting...');
-      if (Date.now() < tokenExpiresAt - 60000) {
-        showConnected();
-        // initPlayer will be called when SDK is ready (onSpotifyWebPlaybackSDKReady)
-      } else if (refreshToken) {
-        ensureToken().then(function() {
-          if (accessToken) showConnected();
-        });
-      }
-    }
+    // Auto-connect on iframe load via server-side session cookie
+    fetch('/api/spotify/status', { credentials: 'include' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.connected) {
+          isConnected = true;
+          showConnected();
+          // initPlayer will be called when SDK is ready (onSpotifyWebPlaybackSDKReady)
+        }
+      })
+      .catch(function() {});
 
     function addTrackToPlaylist(track) {
       return fetch('/api/spotify/playlists/' + currentPlaylistId + '/tracks', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+        headers: { 'Content-Type': 'application/json' }, credentials: 'include',
         body: JSON.stringify({ uris: [track.uri] }),
       })
       .then(function(res) { return res.json(); })
