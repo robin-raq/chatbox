@@ -99,6 +99,11 @@ export function getAppToolSet(): ToolSet {
   const tools: ToolSet = {}
 
   for (const app of appRegistry.getAllApps()) {
+    // Only inject tools for approved apps (child-safety gate)
+    if (app.reviewStatus && app.reviewStatus !== 'approved') {
+      console.debug(`[ChatBridge] Skipping ${app.name} — reviewStatus: ${app.reviewStatus}`)
+      continue
+    }
     for (const appTool of app.tools) {
       const toolName = `app__${app.id}__${appTool.name}`
       const zodSchema = jsonSchemaToZod(appTool.inputSchema)
