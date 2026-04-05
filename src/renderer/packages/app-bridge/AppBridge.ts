@@ -31,12 +31,12 @@ export class AppBridge {
 
   sendToolCall(id: string, name: string, params: Record<string, unknown>): void {
     const msg: ToolCallMessage = { type: 'tool_call', id, name, params }
-    this.iframe.contentWindow?.postMessage(msg, '*')
+    this.iframe.contentWindow?.postMessage(msg, window.location.origin)
   }
 
   sendError(code: string, message: string): void {
     const msg: ErrorMessage = { type: 'error', code, message }
-    this.iframe.contentWindow?.postMessage(msg, '*')
+    this.iframe.contentWindow?.postMessage(msg, window.location.origin)
   }
 
   onToolResult(callback: ToolResultCallback): void {

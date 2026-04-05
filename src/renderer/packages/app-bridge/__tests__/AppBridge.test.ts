@@ -45,7 +45,7 @@ describe('AppBridge', () => {
           name: 'start_game',
           params: { color: 'white' },
         },
-        '*'
+        window.location.origin
       )
     })
 
@@ -59,7 +59,7 @@ describe('AppBridge', () => {
           name: 'get_board_state',
           params: {},
         },
-        '*'
+        window.location.origin
       )
     })
   })
@@ -74,7 +74,7 @@ describe('AppBridge', () => {
           code: 'timeout',
           message: 'App did not respond',
         },
-        '*'
+        window.location.origin
       )
     })
   })
