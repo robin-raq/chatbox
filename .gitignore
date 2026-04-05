@@ -178,3 +178,14 @@ electron-builder.env
 
 .env.sentry-build-plugin
 .sisyphus/
+# ChatBridge private planning docs (not for submission)
+DEMO_VIDEO_SCRIPT.md
+DEMO_VIDEO_FINAL.md
+ARCHITECTURE_TALK.md
+TALK_CHEATSHEET.md
+STUDY_GUIDE.md
+BUILDOUT.md
+ChatBridge_Architecture.pptx
+PRESEARCH.md
+PRESEARCH.pdf
+create_pptx.js
