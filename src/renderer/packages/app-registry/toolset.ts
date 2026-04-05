@@ -53,9 +53,20 @@ export function disconnectBridge(appId: string): void {
   activeBridges.delete(appId)
 }
 
-/** Convert a JSON Schema to a Zod schema. Matches the pattern used by web_search tool. */
-function jsonSchemaToZod(schema: Record<string, unknown>): z.ZodObject<any> {
-  const properties = (schema?.properties || {}) as Record<string, Record<string, unknown>>
+/** A single property from a JSON Schema object */
+interface JsonSchemaProperty {
+  type?: string
+  enum?: string[]
+  description?: string
+}
+
+/**
+ * Convert a JSON Schema to a Zod schema for the Vercel AI SDK's tool() function.
+ * Returns ZodObject<any> because the schema shape is determined at runtime from
+ * dynamic app manifests — we can't know the shape at compile time.
+ */
+function jsonSchemaToZod(schema: Record<string, unknown>): z.ZodObject<Record<string, z.ZodTypeAny>> {
+  const properties = (schema?.properties || {}) as Record<string, JsonSchemaProperty>
   const required = (schema?.required || []) as string[]
 
   const shape: Record<string, z.ZodTypeAny> = {}
