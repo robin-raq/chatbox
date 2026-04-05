@@ -6,18 +6,18 @@ import { AppBridge } from '../AppBridge'
 import type { ToolCallMessage, ToolResultMessage, ContextUpdateMessage, CompletionMessage } from '../../app-registry/types'
 
 // Mock iframe contentWindow
+let mockContentWindow: any
 function createMockIframe(): HTMLIFrameElement {
   const postMessage = vi.fn()
+  mockContentWindow = { postMessage }
   return {
-    contentWindow: {
-      postMessage,
-    },
+    contentWindow: mockContentWindow,
   } as unknown as HTMLIFrameElement
 }
 
-// Simulate receiving a postMessage from an iframe
+// Simulate receiving a postMessage from the iframe (sets source to match)
 function simulateMessage(data: unknown) {
-  const event = new MessageEvent('message', { data })
+  const event = new MessageEvent('message', { data, source: mockContentWindow })
   window.dispatchEvent(event)
 }
 

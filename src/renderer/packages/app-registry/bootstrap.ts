@@ -269,8 +269,8 @@ const LANGUAGE_MANIFEST: AppManifest = {
 export function bootstrapAppRegistry(): void {
   appRegistry.registerApp(CHESS_MANIFEST)
   appRegistry.registerApp(GROKIPEDIA_MANIFEST)
-  appRegistry.registerApp(LANGUAGE_MANIFEST)
   appRegistry.registerApp(DRAWING_MANIFEST)
+  appRegistry.registerApp(LANGUAGE_MANIFEST)
   appRegistry.registerApp(SPOTIFY_MANIFEST)
   console.log('[ChatBridge] Registered apps:', appRegistry.getAllApps().map((a) => a.name).join(', '))
 }
