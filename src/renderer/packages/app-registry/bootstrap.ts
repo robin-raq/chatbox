@@ -200,9 +200,76 @@ const SPOTIFY_MANIFEST: AppManifest = {
   ],
 }
 
+const LANGUAGE_MANIFEST: AppManifest = {
+  id: 'language',
+  name: 'Language Tutor',
+  description: 'Interactive language learning app. ALWAYS use when the user wants to learn a language, study vocabulary, practice translation, or says things like "teach me Chinese/Spanish/French". Call start_lesson first with the target language, then generate_vocab with vocabulary words.',
+  icon: '🌍',
+  uiUrl: '/apps/language/index.html',
+  authTier: 'internal',
+  ageRating: 'all-ages',
+  learningOutcome: 'Foreign language acquisition, vocabulary building, reading comprehension in target language. Students learn through flashcards, translation practice, and quizzes.',
+  dataCollected: [],
+  reviewStatus: 'approved',
+  tools: [
+    {
+      name: 'start_lesson',
+      description: 'Open the language tutor for a specific language. Call this first when the user wants to learn a language.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language: { type: 'string', description: 'The language to learn (e.g., "Chinese", "Spanish", "French", "Japanese")' },
+        },
+        required: ['language'],
+      },
+    },
+    {
+      name: 'generate_vocab',
+      description: 'Generate vocabulary flashcards. Call this after start_lesson. Provide an array of 5-8 vocabulary words with the foreign word, phonetic pronunciation, English meaning, and an example sentence.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          words: {
+            type: 'string',
+            description: 'JSON array of vocabulary objects. Each object must have: word (foreign word), phonetic (pronunciation), english (meaning), example (example sentence in the foreign language). Example: [{"word":"你好","phonetic":"nǐ hǎo","english":"Hello","example":"你好，我叫小明"}]',
+          },
+        },
+        required: ['words'],
+      },
+    },
+    {
+      name: 'quiz_student',
+      description: 'Quiz the student on a vocabulary word. Show a foreign word and 4 English options.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          word: { type: 'string', description: 'The foreign word to quiz on' },
+          phonetic: { type: 'string', description: 'Pronunciation hint' },
+          options: { type: 'string', description: 'JSON array of 4 English options (strings)' },
+          answer: { type: 'string', description: 'The correct English answer (must be one of the options)' },
+        },
+        required: ['word', 'options', 'answer'],
+      },
+    },
+    {
+      name: 'translate',
+      description: 'Display a translation result in the language tutor panel.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          translation: { type: 'string', description: 'The translated text in the target language' },
+          phonetic: { type: 'string', description: 'Pronunciation of the translation' },
+        },
+        required: ['translation'],
+      },
+    },
+  ],
+}
+
 export function bootstrapAppRegistry(): void {
   appRegistry.registerApp(CHESS_MANIFEST)
   appRegistry.registerApp(GROKIPEDIA_MANIFEST)
+  appRegistry.registerApp(LANGUAGE_MANIFEST)
   appRegistry.registerApp(DRAWING_MANIFEST)
   appRegistry.registerApp(SPOTIFY_MANIFEST)
   console.log('[ChatBridge] Registered apps:', appRegistry.getAllApps().map((a) => a.name).join(', '))

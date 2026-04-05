@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Language Tutor - ChatBridge</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f4f8; padding: 16px; color: #1e293b; }
+    .header { text-align: center; margin-bottom: 16px; }
+    .header h2 { font-size: 18px; color: #1a1f36; }
+    .header .lang-badge { display: inline-block; padding: 4px 12px; background: #3b82f6; color: white; border-radius: 12px; font-size: 12px; margin-top: 4px; }
+    .section { background: white; border-radius: 10px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .section-title { font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+    .vocab-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+    .vocab-card:hover { border-color: #3b82f6; background: #eff6ff; }
+    .vocab-card.revealed .vocab-answer { display: block; }
+    .vocab-word { font-size: 24px; font-weight: 700; color: #1a1f36; }
+    .vocab-pinyin { font-size: 14px; color: #3b82f6; margin-top: 2px; }
+    .vocab-answer { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }
+    .vocab-english { font-size: 15px; color: #334155; }
+    .vocab-example { font-size: 13px; color: #64748b; margin-top: 4px; font-style: italic; }
+    .vocab-hint { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 4px; }
+    .translate-box { display: flex; gap: 8px; }
+    .translate-input { flex: 1; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none; }
+    .translate-input:focus { border-color: #3b82f6; }
+    .translate-btn { padding: 10px 18px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .translate-btn:hover { background: #2563eb; }
+    .translate-result { margin-top: 10px; padding: 12px; background: #f0f9ff; border-radius: 8px; display: none; }
+    .translate-result.visible { display: block; }
+    .translate-foreign { font-size: 22px; font-weight: 600; color: #1a1f36; }
+    .translate-phonetic { font-size: 13px; color: #3b82f6; margin-top: 2px; }
+    .quiz-question { text-align: center; padding: 20px; }
+    .quiz-word { font-size: 32px; font-weight: 700; color: #1a1f36; }
+    .quiz-hint { font-size: 14px; color: #3b82f6; margin-top: 4px; }
+    .quiz-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .quiz-option { padding: 12px; background: white; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; cursor: pointer; text-align: center; transition: all 0.15s; }
+    .quiz-option:hover { border-color: #3b82f6; background: #f0f9ff; }
+    .quiz-option.correct { border-color: #059669; background: #d1fae5; }
+    .quiz-option.wrong { border-color: #dc2626; background: #fee2e2; }
+    .score { text-align: center; margin-top: 8px; font-size: 13px; color: #64748b; }
+    .loading { text-align: center; padding: 20px; color: #94a3b8; }
+    .empty { text-align: center; padding: 30px; color: #94a3b8; }
+    .empty-icon { font-size: 36px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2 id="app-title">Language Tutor</h2>
+    <div id="lang-badge" class="lang-badge" style="display:none"></div>
+  </div>
+
+  <div id="content">
+    <div class="empty">
+      <div class="empty-icon">🌍</div>
+      <div>Ask the chatbot: "I want to learn Chinese" or "Teach me Spanish"</div>
+    </div>
+  </div>
+
+  <script src="/apps/sdk/chatbridge-app-sdk.js"></script>
+  <script>
+    var currentLanguage = '';
+    var vocabCards = [];
+    var quizScore = { correct: 0, total: 0 };
+
+    function renderVocab(words) {
+      vocabCards = words;
+      var content = document.getElementById('content');
+      while (content.firstChild) content.removeChild(content.firstChild);
+
+      // Vocabulary section
+      var section = document.createElement('div');
+      section.className = 'section';
+      var title = document.createElement('div');
+      title.className = 'section-title';
+      title.textContent = 'Vocabulary (' + words.length + ' words)';
+      section.appendChild(title);
+
+      words.forEach(function(word) {
+        var card = document.createElement('div');
+        card.className = 'vocab-card';
+        card.onclick = function() { card.classList.toggle('revealed'); };
+
+        var wordEl = document.createElement('div');
+        wordEl.className = 'vocab-word';
+        wordEl.textContent = word.word;
+        card.appendChild(wordEl);
+
+        if (word.phonetic) {
+          var pinyin = document.createElement('div');
+          pinyin.className = 'vocab-pinyin';
+          pinyin.textContent = word.phonetic;
+          card.appendChild(pinyin);
+        }
+
+        var answer = document.createElement('div');
+        answer.className = 'vocab-answer';
+        var english = document.createElement('div');
+        english.className = 'vocab-english';
+        english.textContent = word.english;
+        answer.appendChild(english);
+        if (word.example) {
+          var example = document.createElement('div');
+          example.className = 'vocab-example';
+          example.textContent = word.example;
+          answer.appendChild(example);
+        }
+        card.appendChild(answer);
+        section.appendChild(card);
+      });
+
+      var hint = document.createElement('div');
+      hint.className = 'vocab-hint';
+      hint.textContent = 'Tap a card to reveal the meaning';
+      section.appendChild(hint);
+      content.appendChild(section);
+
+      // Translate section
+      var transSection = document.createElement('div');
+      transSection.className = 'section';
+      var transTitle = document.createElement('div');
+      transTitle.className = 'section-title';
+      transTitle.textContent = 'Translate a phrase';
+      transSection.appendChild(transTitle);
+
+      var box = document.createElement('div');
+      box.className = 'translate-box';
+      var input = document.createElement('input');
+      input.className = 'translate-input';
+      input.id = 'translate-input';
+      input.placeholder = 'Type in English...';
+      box.appendChild(input);
+      var btn = document.createElement('button');
+      btn.className = 'translate-btn';
+      btn.textContent = 'Translate';
+      btn.onclick = function() { translatePhrase(input.value); };
+      box.appendChild(btn);
+      transSection.appendChild(box);
+
+      var result = document.createElement('div');
+      result.className = 'translate-result';
+      result.id = 'translate-result';
+      transSection.appendChild(result);
+      content.appendChild(transSection);
+    }
+
+    function showTranslation(data) {
+      var result = document.getElementById('translate-result');
+      while (result.firstChild) result.removeChild(result.firstChild);
+      var foreign = document.createElement('div');
+      foreign.className = 'translate-foreign';
+      foreign.textContent = data.translation;
+      result.appendChild(foreign);
+      if (data.phonetic) {
+        var phonetic = document.createElement('div');
+        phonetic.className = 'translate-phonetic';
+        phonetic.textContent = data.phonetic;
+        result.appendChild(phonetic);
+      }
+      result.className = 'translate-result visible';
+    }
+
+    function translatePhrase(text) {
+      if (!text) return;
+      // Use the tool call to translate via the backend
+      ChatBridge.sendContextUpdate({ event: 'translate_request', text: text, language: currentLanguage });
+    }
+
+    function renderQuiz(question) {
+      var content = document.getElementById('content');
+      // Keep existing content, add quiz at top
+      var quizSection = document.createElement('div');
+      quizSection.className = 'section';
+      quizSection.id = 'quiz-section';
+      var title = document.createElement('div');
+      title.className = 'section-title';
+      title.textContent = 'Quick Quiz';
+      quizSection.appendChild(title);
+
+      var q = document.createElement('div');
+      q.className = 'quiz-question';
+      var word = document.createElement('div');
+      word.className = 'quiz-word';
+      word.textContent = question.word;
+      q.appendChild(word);
+      if (question.phonetic) {
+        var hint = document.createElement('div');
+        hint.className = 'quiz-hint';
+        hint.textContent = question.phonetic;
+        q.appendChild(hint);
+      }
+      quizSection.appendChild(q);
+
+      var options = document.createElement('div');
+      options.className = 'quiz-options';
+      question.options.forEach(function(opt) {
+        var btn = document.createElement('div');
+        btn.className = 'quiz-option';
+        btn.textContent = opt;
+        btn.onclick = function() {
+          if (btn.classList.contains('correct') || btn.classList.contains('wrong')) return;
+          quizScore.total++;
+          if (opt === question.answer) {
+            btn.classList.add('correct');
+            quizScore.correct++;
+          } else {
+            btn.classList.add('wrong');
+            // Highlight correct answer
+            var allOpts = options.querySelectorAll('.quiz-option');
+            allOpts.forEach(function(o) { if (o.textContent === question.answer) o.classList.add('correct'); });
+          }
+          var scoreEl = document.getElementById('quiz-score');
+          if (scoreEl) scoreEl.textContent = quizScore.correct + '/' + quizScore.total + ' correct';
+        };
+        options.appendChild(btn);
+      });
+      quizSection.appendChild(options);
+
+      var score = document.createElement('div');
+      score.className = 'score';
+      score.id = 'quiz-score';
+      score.textContent = quizScore.correct + '/' + quizScore.total + ' correct';
+      quizSection.appendChild(score);
+
+      // Remove old quiz if exists
+      var old = document.getElementById('quiz-section');
+      if (old) old.parentNode.removeChild(old);
+      content.insertBefore(quizSection, content.firstChild);
+    }
+
+    // Tool handlers
+    ChatBridge.onToolCall('start_lesson', function(params) {
+      currentLanguage = params.language || 'Chinese';
+      document.getElementById('app-title').textContent = currentLanguage + ' Tutor';
+      var badge = document.getElementById('lang-badge');
+      badge.textContent = currentLanguage;
+      badge.style.display = 'inline-block';
+
+      // Return message — the AI will call generate_vocab next
+      return 'Language tutor opened for ' + currentLanguage + '. The student can see the tutor in the side panel. Now call generate_vocab to create vocabulary cards for the student.';
+    });
+
+    ChatBridge.onToolCall('generate_vocab', function(params) {
+      var words = params.words || [];
+      // Parse JSON string if needed (AI sends it as a string)
+      if (typeof words === 'string') {
+        try { words = JSON.parse(words); } catch(e) { return 'Invalid words format. Please provide a valid JSON array.'; }
+      }
+      if (!Array.isArray(words) || words.length === 0) {
+        return 'No vocabulary words provided. Please provide an array of words with: word, phonetic, english, example.';
+      }
+      renderVocab(words);
+      ChatBridge.sendContextUpdate({ event: 'vocab_loaded', count: words.length, language: currentLanguage });
+      return words.length + ' vocabulary cards loaded in the side panel. Student can tap each card to reveal the meaning. The translate box lets them practice with any phrase.';
+    });
+
+    ChatBridge.onToolCall('quiz_student', function(params) {
+      if (!params.word || !params.options || !params.answer) {
+        return 'Quiz requires: word (the foreign word), options (4 English choices), answer (the correct English meaning).';
+      }
+      // Parse options if string
+      var quizData = { word: params.word, phonetic: params.phonetic, answer: params.answer, options: params.options };
+      if (typeof quizData.options === 'string') {
+        try { quizData.options = JSON.parse(quizData.options); } catch(e) { return 'Invalid options format.'; }
+      }
+      renderQuiz(quizData);
+      return 'Quiz question displayed: "' + params.word + '" — student is choosing from 4 options.';
+    });
+
+    ChatBridge.onToolCall('translate', function(params) {
+      if (!params.translation) {
+        return 'Translation requires: translation (the translated text), phonetic (optional pronunciation).';
+      }
+      showTranslation(params);
+      return 'Translation displayed: "' + params.translation + '"' + (params.phonetic ? ' (' + params.phonetic + ')' : '');
+    });
+  </script>
+</body>
+</html>
