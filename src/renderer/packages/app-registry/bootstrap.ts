@@ -214,11 +214,12 @@ const LANGUAGE_MANIFEST: AppManifest = {
   tools: [
     {
       name: 'start_lesson',
-      description: 'Open the language tutor for a specific language. Call this first when the user wants to learn a language.',
+      description: 'Open the language tutor for a specific language. Call this first when the user wants to learn a language. Topics available: greetings, numbers, food, family, colors, travel, school, body.',
       inputSchema: {
         type: 'object',
         properties: {
           language: { type: 'string', description: 'The language to learn (e.g., "Chinese", "Spanish", "French", "Japanese")' },
+          topic: { type: 'string', description: 'Starting topic (e.g., "greetings", "numbers", "food"). Defaults to greetings.' },
         },
         required: ['language'],
       },

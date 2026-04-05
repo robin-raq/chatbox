@@ -42,12 +42,29 @@
     .loading { text-align: center; padding: 20px; color: #94a3b8; }
     .empty { text-align: center; padding: 30px; color: #94a3b8; }
     .empty-icon { font-size: 36px; margin-bottom: 8px; }
+    .topics { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .topic-btn { padding: 6px 14px; font-size: 12px; border: 1px solid #e2e8f0; border-radius: 16px; background: white; cursor: pointer; color: #475569; transition: all 0.15s; }
+    .topic-btn:hover { border-color: #3b82f6; color: #3b82f6; background: #eff6ff; }
+    .topic-btn.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+    .topic-btn.completed { background: #d1fae5; color: #059669; border-color: #059669; }
+    .progress { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .progress-bar { flex: 1; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #3b82f6; border-radius: 3px; transition: width 0.3s; }
+    .progress-text { font-size: 11px; color: #94a3b8; white-space: nowrap; }
   </style>
 </head>
 <body>
   <div class="header">
     <h2 id="app-title">Language Tutor</h2>
     <div id="lang-badge" class="lang-badge" style="display:none"></div>
+  </div>
+
+  <div id="topic-bar" style="display:none">
+    <div class="progress">
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+      <div class="progress-text" id="progress-text">0 / 0 topics</div>
+    </div>
+    <div class="topics" id="topics"></div>
   </div>
 
   <div id="content">
@@ -62,6 +79,73 @@
     var currentLanguage = '';
     var vocabCards = [];
     var quizScore = { correct: 0, total: 0 };
+    var currentTopic = '';
+    var completedTopics = [];
+    var TOPICS = [
+      { id: 'greetings', label: 'Greetings', icon: '👋' },
+      { id: 'numbers', label: 'Numbers', icon: '🔢' },
+      { id: 'food', label: 'Food & Drink', icon: '🍜' },
+      { id: 'family', label: 'Family', icon: '👨‍👩‍👧' },
+      { id: 'colors', label: 'Colors', icon: '🎨' },
+      { id: 'travel', label: 'Travel', icon: '✈️' },
+      { id: 'school', label: 'School', icon: '📚' },
+      { id: 'body', label: 'Body Parts', icon: '🦶' },
+    ];
+
+    function renderTopics() {
+      var bar = document.getElementById('topic-bar');
+      bar.style.display = 'block';
+      var container = document.getElementById('topics');
+      while (container.firstChild) container.removeChild(container.firstChild);
+
+      TOPICS.forEach(function(topic) {
+        var btn = document.createElement('button');
+        btn.className = 'topic-btn';
+        if (topic.id === currentTopic) btn.className += ' active';
+        if (completedTopics.indexOf(topic.id) >= 0) btn.className += ' completed';
+        btn.textContent = topic.icon + ' ' + topic.label;
+        btn.onclick = function() { requestTopic(topic.id, topic.label); };
+        container.appendChild(btn);
+      });
+
+      // Next Lesson button
+      var nextBtn = document.createElement('button');
+      nextBtn.className = 'topic-btn';
+      nextBtn.textContent = '→ Next Lesson';
+      nextBtn.style.fontWeight = '600';
+      nextBtn.onclick = function() {
+        var next = TOPICS.find(function(t) { return completedTopics.indexOf(t.id) < 0 && t.id !== currentTopic; });
+        if (next) requestTopic(next.id, next.label);
+        else requestTopic('review', 'Review All');
+      };
+      container.appendChild(nextBtn);
+
+      // Update progress
+      var fill = document.getElementById('progress-fill');
+      var text = document.getElementById('progress-text');
+      var pct = TOPICS.length > 0 ? (completedTopics.length / TOPICS.length * 100) : 0;
+      fill.style.width = pct + '%';
+      text.textContent = completedTopics.length + ' / ' + TOPICS.length + ' topics';
+    }
+
+    function requestTopic(topicId, topicLabel) {
+      currentTopic = topicId;
+      renderTopics();
+      // Send context update so the AI knows to generate vocab for this topic
+      ChatBridge.sendContextUpdate({
+        event: 'topic_selected',
+        topic: topicLabel,
+        language: currentLanguage,
+        completed: completedTopics,
+      });
+    }
+
+    function markTopicCompleted() {
+      if (currentTopic && completedTopics.indexOf(currentTopic) < 0) {
+        completedTopics.push(currentTopic);
+        renderTopics();
+      }
+    }
 
     function renderVocab(words) {
       vocabCards = words;
@@ -254,13 +338,14 @@
     // Tool handlers
     ChatBridge.onToolCall('start_lesson', function(params) {
       currentLanguage = params.language || 'Chinese';
+      currentTopic = params.topic || 'greetings';
       document.getElementById('app-title').textContent = currentLanguage + ' Tutor';
       var badge = document.getElementById('lang-badge');
       badge.textContent = currentLanguage;
       badge.style.display = 'inline-block';
+      renderTopics();
 
-      // Return message — the AI will call generate_vocab next
-      return 'Language tutor opened for ' + currentLanguage + '. The student can see the tutor in the side panel. Now call generate_vocab to create vocabulary cards for the student.';
+      return 'Language tutor opened for ' + currentLanguage + '. Topic buttons are shown: Greetings, Numbers, Food, Family, Colors, Travel, School, Body Parts. The student starts on "' + currentTopic + '". Now call generate_vocab with vocabulary for this topic. The student can click other topics to switch.';
     });
 
     ChatBridge.onToolCall('generate_vocab', function(params) {
@@ -273,8 +358,9 @@
         return 'No vocabulary words provided. Please provide an array of words with: word, phonetic, english, example.';
       }
       renderVocab(words);
-      ChatBridge.sendContextUpdate({ event: 'vocab_loaded', count: words.length, language: currentLanguage });
-      return words.length + ' vocabulary cards loaded in the side panel. Student can tap each card to reveal the meaning. The translate box lets them practice with any phrase.';
+      markTopicCompleted();
+      ChatBridge.sendContextUpdate({ event: 'vocab_loaded', count: words.length, language: currentLanguage, topic: currentTopic });
+      return words.length + ' vocabulary cards loaded for "' + currentTopic + '". Student can tap cards to reveal meanings, use the translate box, or click another topic button to switch lessons. When ready, they can say "quiz me" or click "Next Lesson".';
     });
 
     ChatBridge.onToolCall('quiz_student', function(params) {
