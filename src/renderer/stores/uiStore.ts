@@ -48,9 +48,6 @@ export const uiStore = createStore(
         // ChatBridge App Panel state
         showAppPanel: false,
         activeAppId: null as string | null,
-        appPanelUrl: '' as string,
-        appPanelName: '' as string,
-        // Multi-app: all open apps (keyed by app ID)
         openApps: {} as Record<string, { url: string; name: string }>,
       },
       (set, get) => ({
@@ -210,24 +207,7 @@ export const uiStore = createStore(
         // ChatBridge App Panel actions
         openApp: (appId: string, url: string, name: string) => {
           const openApps = { ...get().openApps, [appId]: { url, name } }
-          set({ showAppPanel: true, activeAppId: appId, appPanelUrl: url, appPanelName: name, openApps })
-        },
-        closeApp: () => {
-          // Close only the active app
-          const { activeAppId, openApps } = get()
-          if (activeAppId) {
-            const next = { ...openApps }
-            delete next[activeAppId]
-            const remainingIds = Object.keys(next)
-            if (remainingIds.length > 0) {
-              // Switch to another open app
-              const nextId = remainingIds[0]
-              set({ activeAppId: nextId, appPanelUrl: next[nextId].url, appPanelName: next[nextId].name, openApps: next })
-            } else {
-              // No more apps open
-              set({ showAppPanel: false, activeAppId: null, appPanelUrl: '', appPanelName: '', openApps: next })
-            }
-          }
+          set({ showAppPanel: true, activeAppId: appId, openApps })
         },
         closeSpecificApp: (appId: string) => {
           const { activeAppId, openApps } = get()
@@ -236,20 +216,17 @@ export const uiStore = createStore(
           const remainingIds = Object.keys(next)
           if (appId === activeAppId) {
             if (remainingIds.length > 0) {
-              const nextId = remainingIds[0]
-              set({ activeAppId: nextId, appPanelUrl: next[nextId].url, appPanelName: next[nextId].name, openApps: next })
+              set({ activeAppId: remainingIds[0], openApps: next })
             } else {
-              set({ showAppPanel: false, activeAppId: null, appPanelUrl: '', appPanelName: '', openApps: next })
+              set({ showAppPanel: false, activeAppId: null, openApps: next })
             }
           } else {
             set({ openApps: next })
           }
         },
         switchApp: (appId: string) => {
-          const { openApps } = get()
-          const app = openApps[appId]
-          if (app) {
-            set({ activeAppId: appId, appPanelUrl: app.url, appPanelName: app.name })
+          if (get().openApps[appId]) {
+            set({ activeAppId: appId })
           }
         },
         setShowAppPanel: (show: boolean) => {
