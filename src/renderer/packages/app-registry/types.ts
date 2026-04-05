@@ -102,11 +102,3 @@ export interface AppManifest {
   reviewStatus?: ReviewStatus
 }
 
-// ─── Runtime State ───────────────────────────────────────────────────────────
-
-/** Tracks an active app instance in the platform. */
-export interface ActiveApp {
-  manifest: AppManifest
-  iframeRef: HTMLIFrameElement | null
-  bridgeReady: boolean
-}
