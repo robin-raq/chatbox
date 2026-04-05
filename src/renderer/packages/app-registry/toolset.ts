@@ -8,7 +8,6 @@
  */
 import { tool, type ToolSet } from 'ai'
 import z from 'zod'
-import { v4 as uuidv4 } from 'uuid'
 import { uiStore } from '@/stores/uiStore'
 import { AppBridge } from '../app-bridge/AppBridge'
 import { appRegistry } from './registry'
@@ -17,15 +16,11 @@ import type { AppManifest, AppToolDefinition } from './types'
 /** Active bridges keyed by app ID */
 const activeBridges = new Map<string, AppBridge>()
 
-/** Track whether the AI is currently generating (executing tools) */
-let aiIsGenerating = false
-
 /** Pending tool call resolvers keyed by call ID */
 const pendingCalls = new Map<string, { resolve: (result: unknown) => void; reject: (err: Error) => void }>()
 
 /** Connect a bridge to an app's iframe after it loads */
 export function connectBridge(appId: string, iframe: HTMLIFrameElement): void {
-  // Destroy existing bridge if any
   activeBridges.get(appId)?.destroy()
 
   const bridge = new AppBridge(iframe)
@@ -112,15 +107,9 @@ export function getAppToolSet(): ToolSet {
         description: `[${app.name}] ${appTool.description}`,
         inputSchema: zodSchema,
         execute: async (params: Record<string, unknown>) => {
-          // Mark AI as generating to prevent auto-respond loops
-          aiIsGenerating = true
-
-          try {
-          // Ensure the app panel is open
           const state = uiStore.getState()
           if (state.activeAppId !== app.id) {
             state.openApp(app.id, app.uiUrl, app.name)
-            // Wait for iframe to load and bridge to connect
             await waitForBridge(app.id, 5000)
           }
 
@@ -129,10 +118,9 @@ export function getAppToolSet(): ToolSet {
             return { error: `${app.name} app is not connected. The app panel may need to be reopened. Tell the user to try again.` }
           }
 
-          // Send tool call and wait for result
           const callId = `call_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-          const resultPromise = new Promise<unknown>((resolve, reject) => {
-            pendingCalls.set(callId, { resolve, reject })
+          const resultPromise = new Promise<unknown>((resolve) => {
+            pendingCalls.set(callId, { resolve, reject: () => {} })
             setTimeout(() => {
               if (pendingCalls.has(callId)) {
                 pendingCalls.delete(callId)
@@ -142,58 +130,13 @@ export function getAppToolSet(): ToolSet {
           })
 
           bridge.sendToolCall(callId, appTool.name, params)
-          const result = await resultPromise
-          return result
-          } finally {
-            // Re-enable auto-respond after a delay
-            // The AI SDK may call multiple tools sequentially (get_board_state → make_move)
-            // We wait 2 seconds after the last tool completes before re-enabling
-            setTimeout(() => {
-              aiIsGenerating = false
-              console.debug('[ChatBridge] aiIsGenerating reset to false')
-            }, 2000)
-          }
+          return resultPromise
         },
       })
     }
   }
 
   return tools
-}
-
-/** Auto-respond to a chess move by injecting a user message and triggering AI generation */
-async function autoRespondToMove(data: Record<string, unknown>) {
-  try {
-    const { submitNewUserMessage } = await import('@/stores/session/messages')
-    const { currentSessionIdAtom } = await import('@/stores/atoms/sessionAtoms')
-    const jotai = await import('jotai')
-
-    // Get current session ID from the jotai atom store
-    // We need to access it through the default store
-    const { getDefaultStore } = jotai
-    const store = getDefaultStore()
-    const sessionId = store.get(currentSessionIdAtom)
-    if (!sessionId) return
-
-    const move = data.last_move || 'unknown'
-    const turn = data.turn || ''
-
-    // Create a user message describing the move
-    const userMsg = {
-      id: uuidv4(),
-      role: 'user' as const,
-      contentParts: [{ type: 'text' as const, text: `I played ${move}. Your turn.` }],
-    }
-
-    console.debug(`[ChatBridge] Auto-submitting move message: "I played ${move}"`)
-
-    await submitNewUserMessage(sessionId, {
-      newUserMsg: userMsg as any,
-      needGenerating: true,
-    })
-  } catch (err) {
-    console.error('[ChatBridge] Auto-respond error:', err)
-  }
 }
 
 /** Wait for a bridge to be connected (iframe loaded) */
@@ -211,7 +154,7 @@ function waitForBridge(appId: string, timeoutMs: number): Promise<void> {
     }, 100)
     setTimeout(() => {
       clearInterval(interval)
-      resolve() // resolve anyway, the execute function will handle missing bridge
+      resolve()
     }, timeoutMs)
   })
 }
