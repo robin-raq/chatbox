@@ -28,7 +28,7 @@
   function sendResult(id, result) {
     window.parent.postMessage(
       { type: 'tool_result', id: id, result: result },
-      '*'
+      (window.location.origin || '*')
     )
   }
 
@@ -36,7 +36,7 @@
   function sendError(id, code, message) {
     window.parent.postMessage(
       { type: 'tool_result', id: id, error: { code: code, message: message } },
-      '*'
+      (window.location.origin || '*')
     )
   }
 
@@ -44,7 +44,7 @@
   function sendContextUpdate(data) {
     window.parent.postMessage(
       { type: 'context_update', data: data },
-      '*'
+      (window.location.origin || '*')
     )
   }
 
@@ -52,7 +52,7 @@
   function sendCompletion(result) {
     window.parent.postMessage(
       { type: 'completion', result: result || null },
-      '*'
+      (window.location.origin || '*')
     )
   }
 
