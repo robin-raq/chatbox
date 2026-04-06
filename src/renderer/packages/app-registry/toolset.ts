@@ -119,9 +119,12 @@ export function getAppToolSet(): ToolSet {
         inputSchema: zodSchema,
         execute: async (params: Record<string, unknown>) => {
           const state = uiStore.getState()
-          if (state.activeAppId !== app.id) {
+          // Always ensure the app is open and visible
+          if (!state.openApps[app.id] || !state.showAppPanel) {
             state.openApp(app.id, app.uiUrl, app.name)
             await waitForBridge(app.id, 5000)
+          } else if (state.activeAppId !== app.id) {
+            state.switchApp(app.id)
           }
 
           const bridge = activeBridges.get(app.id)
