@@ -118,13 +118,13 @@ export function getAppToolSet(): ToolSet {
         description: `[${app.name}] ${appTool.description}`,
         inputSchema: zodSchema,
         execute: async (params: Record<string, unknown>) => {
+          // Always open/switch to the app — ensures panel is visible
           const state = uiStore.getState()
-          // Always ensure the app is open and visible
-          if (!state.openApps[app.id] || !state.showAppPanel) {
-            state.openApp(app.id, app.uiUrl, app.name)
+          state.openApp(app.id, app.uiUrl, app.name)
+
+          // Wait for bridge if this is a new iframe
+          if (!activeBridges.has(app.id)) {
             await waitForBridge(app.id, 5000)
-          } else if (state.activeAppId !== app.id) {
-            state.switchApp(app.id)
           }
 
           const bridge = activeBridges.get(app.id)
