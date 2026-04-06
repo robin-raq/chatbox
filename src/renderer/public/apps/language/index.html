@@ -402,11 +402,19 @@
       var words = params.words || [];
       // Parse JSON string if needed (AI sends it as a string)
       if (typeof words === 'string') {
-        try { words = JSON.parse(words); } catch(e) { return 'Invalid words format. Please provide a valid JSON array.'; }
+        try { words = JSON.parse(words); } catch(e) {
+          return 'ERROR: Invalid JSON. The words parameter must be a JSON array like: [{"word":"头","phonetic":"tóu","english":"Head","example":"我的头很疼"}]. You sent plain text instead of JSON. Please retry with a valid JSON array.';
+        }
       }
       if (!Array.isArray(words) || words.length === 0) {
-        return 'No vocabulary words provided. Please provide an array of words with: word, phonetic, english, example.';
+        return 'ERROR: words must be a non-empty JSON array. Each element needs: word, phonetic, english, example. Example: [{"word":"头","phonetic":"tóu","english":"Head","example":"我的头很疼"}]';
       }
+      // Validate each word has required fields
+      var valid = words.filter(function(w) { return w.word && w.english; });
+      if (valid.length === 0) {
+        return 'ERROR: No valid vocabulary words found. Each object must have at minimum "word" and "english" fields. Example: [{"word":"头","phonetic":"tóu","english":"Head","example":"我的头很疼"}]';
+      }
+      words = valid;
       renderVocab(words);
       markTopicCompleted();
       ChatBridge.sendContextUpdate({ event: 'vocab_loaded', count: words.length, language: currentLanguage, topic: currentTopic });

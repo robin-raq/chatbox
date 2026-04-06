@@ -226,13 +226,13 @@ const LANGUAGE_MANIFEST: AppManifest = {
     },
     {
       name: 'generate_vocab',
-      description: 'Generate vocabulary flashcards. Call this after start_lesson. Provide an array of 5-8 vocabulary words with the foreign word, phonetic pronunciation, English meaning, and an example sentence.',
+      description: 'Generate vocabulary flashcards. IMPORTANT: The words parameter MUST be a valid JSON array string. Each element MUST have exactly 4 fields: word, phonetic, english, example. Do NOT include explanations, descriptions, or essays — ONLY the JSON array.',
       inputSchema: {
         type: 'object',
         properties: {
           words: {
             type: 'string',
-            description: 'JSON array of vocabulary objects. Each object must have: word (foreign word), phonetic (pronunciation), english (meaning), example (example sentence in the foreign language). Example: [{"word":"你好","phonetic":"nǐ hǎo","english":"Hello","example":"你好，我叫小明"}]',
+            description: 'MUST be a valid JSON array of objects. Each object has exactly: "word" (the foreign word/character), "phonetic" (pronunciation in latin characters), "english" (English meaning, 1-3 words), "example" (short example sentence in the foreign language). Example value: [{"word":"头","phonetic":"tóu","english":"Head","example":"我的头很疼"},{"word":"手","phonetic":"shǒu","english":"Hand","example":"请举手"}]. Generate 5-8 words per topic. NO prose, NO explanations, ONLY the JSON array.',
           },
         },
         required: ['words'],
