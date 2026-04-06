@@ -58,8 +58,11 @@ Built on a fork of [Chatbox](https://github.com/chatboxai/chatbox), an open-sour
               │                       │
               │  /api/grokipedia/*    │
               │  /api/spotify/*       │
-              │  (API key vault +     │
-              │   OAuth2 proxy)       │
+              │  /api/admin/*         │
+              │                       │
+              │  Sessions: JSON file  │
+              │  Admin: in-memory Map │
+              │  API keys: env vars   │
               └───────────────────────┘
 ```
 
@@ -91,7 +94,7 @@ Four message types over postMessage:
 | State | Zustand + React Query |
 | AI/LLM | Vercel AI SDK v6 (OpenAI + Anthropic) |
 | Backend | Express on Node.js |
-| Database | PostgreSQL on Railway |
+| Session Storage | In-memory Maps + JSON file (production: PostgreSQL/Redis) |
 | App Sandboxing | Sandboxed iframes + postMessage |
 | Deployment | Railway |
 
@@ -176,7 +179,7 @@ The current architecture handles 1-10 concurrent users (demo scope). Here's what
 **Planned mitigations:**
 - **Queue-based tool execution** — Decouple LLM streaming from tool execution using Redis/BullMQ. Tool calls go into a queue, the SSE stream sends a "processing" event, and the result is pushed via WebSocket when ready. This removes the connection-blocking bottleneck.
 - **Tool result caching** — If 50 students look up "photosynthesis," cache the first xAI Grok response (TTL 5 min). Eliminates redundant API calls.
-- **Horizontal scaling** — Railway supports multi-instance deployments behind a load balancer. The Express backend is stateless (session state in Redis, not in-memory Maps).
+- **Horizontal scaling** — Railway supports multi-instance deployments behind a load balancer. Currently the backend uses in-memory Maps and a JSON file for sessions — production would move these to Redis/PostgreSQL for shared state across instances.
 - **Selective tool injection** — Only inject schemas for contextually relevant apps per conversation. A keyword/embedding match routes "let's play chess" to inject only chess tools (~800 tokens instead of 3,500). Reduces ~60% of token costs.
 - **Connection pooling** — Use a WebSocket connection per user instead of SSE for bidirectional communication, reducing connection overhead.
 
