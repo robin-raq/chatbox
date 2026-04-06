@@ -411,9 +411,35 @@ allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox
 
 ---
 
+## Admin Review & Child Safety
+
+Apps can declare safety metadata in their manifest:
+
+```json
+{
+  "ageRating": "all-ages",
+  "learningOutcome": "Strategic thinking, problem solving",
+  "dataCollected": [],
+  "privacyPolicyUrl": null,
+  "reviewStatus": "approved"
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `ageRating` | `"all-ages"`, `"6+"`, `"10+"`, `"13+"`, `"18+"` |
+| `learningOutcome` | What educational value the app provides |
+| `dataCollected` | Array of data types the app collects (e.g., `["search queries"]`) |
+| `privacyPolicyUrl` | Link to the app's privacy policy (required for authenticated apps) |
+| `reviewStatus` | `"pending"`, `"approved"`, `"rejected"` — only approved apps have their tools injected into the LLM |
+
+The admin dashboard at `/admin.html` provides a review UI for managing app approvals. Rejected apps have their tools completely removed from the AI's function-calling interface.
+
+---
+
 ## Example Apps
 
-ChatBridge ships with 4 built-in apps that demonstrate different integration patterns.
+ChatBridge ships with 5 built-in apps that demonstrate different integration patterns.
 
 ### Chess (`/apps/chess/index.html`)
 - **Auth tier:** Internal
@@ -427,17 +453,23 @@ ChatBridge ships with 4 built-in apps that demonstrate different integration pat
 - **Tools:** `search_articles`, `get_article`, `explain_topic`
 - **Notable:** Search uses Wikipedia API. Explain uses xAI Grok for AI-generated articles. Falls back to mock data on failure.
 
-### Drawing Canvas (`/apps/drawing/index.html`)
+### Excalidraw Whiteboard (`/apps/drawing/index.html`)
 - **Auth tier:** Internal
-- **Pattern:** Rich interactive UI with no natural endpoint
-- **Tools:** `get_canvas_state`, `clear_canvas`, `add_text`, `export_image`
-- **Notable:** HTML5 Canvas with pen, eraser, shapes, colors. User-triggered completion.
+- **Pattern:** Rich interactive UI (embedded third-party tool) with user-triggered completion
+- **Tools:** `open_whiteboard`, `get_canvas_state`, `clear_canvas`
+- **Notable:** Embeds excalidraw.com for a professional whiteboard experience. Pen, shapes, arrows, text, connectors.
+
+### Language Tutor (`/apps/language/index.html`)
+- **Auth tier:** Internal
+- **Pattern:** AI-generated content, multi-step tool orchestration, lesson progression
+- **Tools:** `start_lesson`, `generate_vocab`, `quiz_student`, `translate`
+- **Notable:** AI generates vocabulary flashcards for any language. 8 topic lessons with progress tracking. Translation calls xAI Grok API via backend proxy. Richest tool chain in the platform.
 
 ### Spotify (`/apps/spotify/index.html`)
 - **Auth tier:** External Authenticated
 - **Pattern:** OAuth2 flow, multi-step workflow, real-time playback
 - **Tools:** `search_tracks`, `create_playlist`, `add_to_playlist`
-- **Notable:** Full OAuth2 popup flow. Spotify Web Playback SDK for in-browser audio. Token persistence via localStorage.
+- **Notable:** Full OAuth2 popup flow. Tokens stored in server-side httpOnly cookies (not localStorage). Spotify Web Playback SDK for in-browser audio. CSRF protection via OAuth state parameter.
 
 ---
 
