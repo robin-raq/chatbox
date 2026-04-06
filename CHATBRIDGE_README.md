@@ -151,13 +151,36 @@ pnpm test
 
 ### Scalability
 
-The current architecture handles 1-10 concurrent users (demo scope). At classroom scale (1,000+ students), the bottleneck is **tool call blocking** — each tool invocation holds an SSE connection open while awaiting the iframe's postMessage response (30-second timeout).
+The current architecture handles 1-10 concurrent users (demo scope). Here's what happens as load increases:
+
+**At 100 concurrent users:**
+- The Express backend on Railway handles ~100 concurrent connections comfortably (single instance)
+- LLM API calls are the bottleneck — each chat turn takes 2-5 seconds for GPT-4o-mini to respond
+- Tool schemas (5 apps, 17 tools = ~3,500 tokens) are sent on every request, costing ~$13/month in LLM fees
+- Spotify OAuth sessions stored in a JSON file work fine — 100 entries is negligible
+- No infrastructure changes needed at this scale
+
+**At 1,000 concurrent users:**
+- Express single-instance hits connection limits during peak usage (school bell rings → 1,000 students open chat simultaneously)
+- The in-memory `pendingCalls` Map in toolset.ts grows to ~1,000 entries during peak — manageable but needs timeout cleanup
+- LLM costs jump to ~$130/month (GPT-4o-mini) — still viable
+- The JSON file for Spotify sessions becomes a bottleneck (1,000 writes with file I/O contention)
+- **What breaks first:** SSE connection limits on the single Express instance
+
+**At 10,000 concurrent users:**
+- Single Express instance cannot handle the load — need horizontal scaling
+- Tool schema injection is the #1 cost driver: 3,500 tokens × 10K users × 20 msgs = significant waste
+- Spotify session file must be replaced with Redis or PostgreSQL
+- Admin review state must move from in-memory Map to a database
 
 **Planned mitigations:**
-- **Queue-based tool execution** — Decouple LLM streaming from tool execution using Redis/BullMQ
-- **Tool result caching** — If 50 students look up "photosynthesis," cache the first result (TTL 5 min)
-- **Horizontal scaling** — Railway supports multi-instance deployments behind a load balancer
-- **Selective tool injection** — Only inject schemas for contextually relevant apps per conversation (reduces ~60% of token costs at scale)
+- **Queue-based tool execution** — Decouple LLM streaming from tool execution using Redis/BullMQ. Tool calls go into a queue, the SSE stream sends a "processing" event, and the result is pushed via WebSocket when ready. This removes the connection-blocking bottleneck.
+- **Tool result caching** — If 50 students look up "photosynthesis," cache the first xAI Grok response (TTL 5 min). Eliminates redundant API calls.
+- **Horizontal scaling** — Railway supports multi-instance deployments behind a load balancer. The Express backend is stateless (session state in Redis, not in-memory Maps).
+- **Selective tool injection** — Only inject schemas for contextually relevant apps per conversation. A keyword/embedding match routes "let's play chess" to inject only chess tools (~800 tokens instead of 3,500). Reduces ~60% of token costs.
+- **Connection pooling** — Use a WebSocket connection per user instead of SSE for bidirectional communication, reducing connection overhead.
+
+See [AI Cost Analysis](./docs/COST_ANALYSIS.md) for detailed cost projections at each scale.
 
 ### Security
 
