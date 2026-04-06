@@ -131,12 +131,62 @@
     function requestTopic(topicId, topicLabel) {
       currentTopic = topicId;
       renderTopics();
-      // Send context update so the AI knows to generate vocab for this topic
-      ChatBridge.sendContextUpdate({
-        event: 'topic_selected',
-        topic: topicLabel,
-        language: currentLanguage,
-        completed: completedTopics,
+      // Generate vocabulary via the backend translation API
+      generateVocabForTopic(topicId, topicLabel);
+    }
+
+    function generateVocabForTopic(topicId, topicLabel) {
+      // Show loading state
+      var content = document.getElementById('content');
+      while (content.firstChild) content.removeChild(content.firstChild);
+      var loading = document.createElement('div');
+      loading.className = 'loading';
+      loading.textContent = 'Generating ' + topicLabel + ' vocabulary...';
+      content.appendChild(loading);
+
+      // Call backend to generate vocab using xAI Grok
+      fetch('/api/grokipedia/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: 'Generate 6 vocabulary words for learning ' + currentLanguage + ' on the topic "' + topicLabel + '". Return a JSON array where each item has: word (in ' + currentLanguage + '), phonetic (pronunciation in Latin characters), english (English meaning), example (example sentence in ' + currentLanguage + '). Return ONLY the JSON array, no other text.',
+          level: 'beginner',
+        }),
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var words = [];
+        // Try to extract array from the response
+        var text = data.summary || data.title || '';
+        try {
+          // Look for JSON array in the response
+          var match = text.match(/\[[\s\S]*\]/);
+          if (match) words = JSON.parse(match[0]);
+        } catch(e) {}
+        // Fallback: try key_facts as simple words
+        if (words.length === 0 && data.key_facts && data.key_facts.length > 0) {
+          words = data.key_facts.map(function(fact) {
+            return { word: fact, phonetic: '', english: fact, example: '' };
+          });
+        }
+        if (words.length > 0) {
+          renderVocab(words);
+          markTopicCompleted();
+        } else {
+          // Show message to ask AI instead
+          while (content.firstChild) content.removeChild(content.firstChild);
+          var msg = document.createElement('div');
+          msg.className = 'empty';
+          msg.textContent = 'Say "teach me ' + topicLabel.toLowerCase() + ' in ' + currentLanguage + '" in the chat';
+          content.appendChild(msg);
+        }
+      })
+      .catch(function() {
+        while (content.firstChild) content.removeChild(content.firstChild);
+        var msg = document.createElement('div');
+        msg.className = 'empty';
+        msg.textContent = 'Say "teach me ' + topicLabel.toLowerCase() + ' in ' + currentLanguage + '" in the chat';
+        content.appendChild(msg);
       });
     }
 
