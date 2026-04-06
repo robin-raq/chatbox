@@ -294,9 +294,15 @@ export async function streamText(
     }
 
     // 4. construct tool set
+    // Extract the last user message for selective tool injection
+    const lastUserMsg = [...params.messages].reverse().find((m) => m.role === 'user')
+    const lastUserText = lastUserMsg?.contentParts
+      ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+      .map((p) => p.text)
+      .join(' ') || ''
     let tools: ToolSet = {
       ...mcpController.getAvailableTools(),
-      ...getAppToolSet(),
+      ...getAppToolSet(lastUserText),
     }
     if (webBrowsing) {
       tools.web_search = webSearchTool
