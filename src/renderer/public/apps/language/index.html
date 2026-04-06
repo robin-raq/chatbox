@@ -409,10 +409,13 @@
       if (!Array.isArray(words) || words.length === 0) {
         return 'ERROR: words must be a non-empty JSON array. Each element needs: word, phonetic, english, example. Example: [{"word":"头","phonetic":"tóu","english":"Head","example":"我的头很疼"}]';
       }
-      // Validate each word has required fields
-      var valid = words.filter(function(w) { return w.word && w.english; });
+      // Validate each word has required fields and correct format
+      // Real vocab words are short (1-15 chars), not sentences
+      var valid = words.filter(function(w) {
+        return w.word && w.english && w.word.length <= 15 && w.english.length <= 30;
+      });
       if (valid.length === 0) {
-        return 'ERROR: No valid vocabulary words found. Each object must have at minimum "word" and "english" fields. Example: [{"word":"头","phonetic":"tóu","english":"Head","example":"我的头很疼"}]';
+        return 'ERROR: Invalid vocabulary format. The "word" field must be the actual foreign word (1-15 characters, e.g. "头" or "cabeza"), NOT a sentence or description. The "english" field must be the English meaning (1-3 words, e.g. "Head"). Example: [{"word":"头","phonetic":"tóu","english":"Head","example":"我的头很疼"}]. Please retry with short word/english values.';
       }
       words = valid;
       renderVocab(words);
